@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nexus-nancy"
+version = "0.1.0"
+description = "Seriously lightweight agent TUI for Nexus environments"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "AmberLee2427" }
+]
+dependencies = [
+  "bashlex>=0.18",
+  "httpx>=0.27.0",
+  "tiktoken>=0.8.0",
+  "textual>=0.80.0",
+  "tomli>=2.0.1; python_version < '3.11'"
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.5.0",
+  "bump-my-version>=0.26.0"
+]
+docs = [
+  "sphinx>=8.0.0",
+  "sphinx-rtd-theme>=2.0.0"
+]
+
+[project.scripts]
+nnancy = "nexus_nancy.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nexus_nancy"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "src/nexus_nancy",
+  "README.md",
+  "pyproject.toml",
+  "docs",
+  ".readthedocs.yaml"
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP"]
+
+[tool.bumpversion]
+current_version = "0.1.0"
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
+serialize = ["{major}.{minor}.{patch}"]
+search = "{current_version}"
+replace = "{new_version}"
+tag = false
+commit = false
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+
+[[tool.bumpversion.files]]
+filename = "src/nexus_nancy/__init__.py"
