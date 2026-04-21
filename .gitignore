@@ -8,3 +8,9 @@ logs/
 *.egg-info
 dist/
 build/
+
+# allow files
+!.agents/nnancy.yaml
+!.agents/hand-off_instructions.md
+!.agents/instructions.md
+!.agents/relay_instructions.md

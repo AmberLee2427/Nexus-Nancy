@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .config import Config, api_key_path, load_instructions, load_sandbox_allowlist, open_in_editor, replace_api_key
+from .config import Config, load_instructions, load_sandbox_allowlist, open_config_in_editor, replace_api_key
 from .llm import LLMClient
 from .sandbox import SandboxPolicy
 from .session import SessionState
@@ -75,12 +75,8 @@ def run_prompt(
     user_text: str,
 ) -> str:
     if user_text.strip() == "/config":
-        path = api_key_path(state.cfg, state.workspace_root)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if not path.exists():
-            path.write_text("", encoding="utf-8")
-        open_in_editor(path)
-        return f"opened key file: {path}"
+        path = open_config_in_editor(state.workspace_root)
+        return f"opened config file: {path}"
 
     if user_text.strip().startswith("/key"):
         _, _, new_value = user_text.strip().partition(" ")

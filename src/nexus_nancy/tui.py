@@ -14,7 +14,7 @@ from textual.widgets import Footer, Header, Input, RichLog, Static
 from rich.text import Text
 
 from .app import estimate_context_tokens, run_prompt
-from .config import api_key_path, open_in_editor, replace_api_key
+from .config import api_key_path, config_path, open_config_in_editor, replace_api_key
 from .sandbox import SandboxPolicy
 from .session import SessionState
 
@@ -109,8 +109,8 @@ class NancyTUI(App[None]):
             self._refresh_status()
             return
         if text == "/config":
-            await self.action_open_key_file()
-            self._append("system", f"opened key file: {api_key_path(self.state.cfg, self.state.workspace_root)}")
+            await self.action_open_config_file()
+            self._append("system", f"opened config file: {config_path(self.state.workspace_root)}")
             self._refresh_status()
             return
         if text == "/key":
@@ -145,13 +145,9 @@ class NancyTUI(App[None]):
             else:
                 subprocess.run(["cat", str(self.transcript_path)], check=False)
 
-    async def action_open_key_file(self) -> None:
-        key_path = api_key_path(self.state.cfg, self.state.workspace_root)
-        key_path.parent.mkdir(parents=True, exist_ok=True)
-        if not key_path.exists():
-            key_path.write_text("", encoding="utf-8")
+    async def action_open_config_file(self) -> None:
         with self.suspend():
-            open_in_editor(key_path)
+            open_config_in_editor(self.state.workspace_root)
 
     async def action_replace_key_interactive(self) -> None:
         with self.suspend():

@@ -158,6 +158,50 @@ def open_in_editor(path: Path) -> None:
     subprocess.run(["nano", str(path)], check=True)
 
 
+def open_config_in_editor(workspace_root: Path) -> Path:
+    path = config_path(workspace_root)
+    open_in_editor(path)
+    _normalize_config_paths_on_save(path, workspace_root)
+    return path
+
+
+def _normalize_config_paths_on_save(path: Path, workspace_root: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    raw = _parse_flat_yaml(text)
+
+    updates: dict[str, str] = {}
+    api_key_file = str(raw.get("api_key_file", "")).strip()
+    sandbox_root = str(raw.get("sandbox_root", "")).strip()
+
+    if api_key_file:
+        updates["api_key_file"] = str((workspace_root / _unquote(api_key_file)).expanduser().resolve())
+    if sandbox_root:
+        updates["sandbox_root"] = str((workspace_root / _unquote(sandbox_root)).expanduser().resolve())
+
+    if not updates:
+        return
+
+    lines = text.splitlines()
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or ":" not in stripped:
+            continue
+        before, _, _ = line.partition(":")
+        key = before.strip()
+        if key not in updates:
+            continue
+        indent = before[: len(before) - len(before.lstrip())]
+        lines[idx] = f"{indent}{key}: {updates[key]}"
+
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _unquote(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    return value
+
+
 def api_key_path(cfg: Config, workspace_root: Path) -> Path:
     return (workspace_root / cfg.api_key_file).resolve()
 

@@ -5,10 +5,10 @@ from pathlib import Path
 
 from .app import build_state, run_prompt
 from .config import (
-    api_key_path,
     bootstrap_local_files,
     instructions_path,
     load_config,
+    open_config_in_editor,
     open_in_editor,
 )
 from .doctor import run_doctor
@@ -96,12 +96,7 @@ def main() -> None:
         return
 
     if command == "config":
-        cfg = load_config(workspace_root)
-        key_path = api_key_path(cfg, workspace_root)
-        key_path.parent.mkdir(parents=True, exist_ok=True)
-        if not key_path.exists():
-            key_path.write_text("", encoding="utf-8")
-        open_in_editor(key_path)
+        open_config_in_editor(workspace_root)
         return
 
     cfg = load_config(workspace_root)

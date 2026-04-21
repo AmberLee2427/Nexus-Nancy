@@ -46,6 +46,11 @@ nnancy config
 nnancy instructions
 ```
 
+For API key management during chat sessions:
+
+- `/config` opens `.agents/nnancy.yaml`
+- `/key` replaces the API key value (does not print current key)
+
 ## Usage
 
 ```bash
@@ -79,7 +84,11 @@ Inside the prompt:
 - `/new` starts a fresh in-process context
 - `/handoff` writes a JSON continuation snapshot to `logs/handoff.json`
 - `/handoff path/to/handoff.json` loads prior context
+- `/config` opens workspace config file `.agents/nnancy.yaml`
+- `/key NEW_API_KEY` replaces API key file contents
 - `@relative/path` inlines file content into your prompt
+
+In the Textual TUI, you can also run `/key` with no argument to set the key via hidden prompts (value + confirmation) without echoing the key to screen.
 
 ## Notes
 
