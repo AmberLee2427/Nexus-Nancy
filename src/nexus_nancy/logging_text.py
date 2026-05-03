@@ -14,6 +14,8 @@ class TextLog:
         self.root.mkdir(parents=True, exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d-%H%M%S")
         self.file_path = self.root / f"session-{ts}.log"
+        # Session logs are intentionally plain text artifacts for inspection by
+        # humans. Do not compact, sanitize, or hide diagnostic content here.
         self.file_path.write_text(
             f"# Nexus-Nancy session {ts}\\n", encoding="utf-8"
         )
@@ -21,4 +23,6 @@ class TextLog:
     def write(self, role: str, text: str) -> None:
         stamp = datetime.now().strftime("%H:%M:%S")
         with self.file_path.open("a", encoding="utf-8") as f:
+            # Write the exact payload received. The log is meant to expose wires,
+            # not cover them up.
             f.write(f"\\n[{stamp}] {role}\\n{text}\\n")

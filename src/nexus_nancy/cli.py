@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import runpy
+import socket
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 from .app import build_state, run_prompt
 from .config import (
+    Config,
     bootstrap_local_files,
     instructions_path,
     load_config,
@@ -24,6 +29,9 @@ HELP = """Nexus-Nancy
 Usage:
     nnancy
     nnancy -t \"your prompt\"
+    nnancy -m
+    nnancy -tm \"your prompt\"
+    nnancy --mock-server
     nnancy doctor
     nnancy instructions
     nnancy config
@@ -38,11 +46,86 @@ Attachments:
 """
 
 
-def _parse_args(argv: list[str]) -> tuple[bool, str | None, bool, str | None]:
+class MockServerInstallError(RuntimeError):
+    """Raised when the test-only mock server is requested outside a repo checkout."""
+
+
+def _repo_mock_server_script(workspace_root: Path) -> Path:
+    script_path = workspace_root / "tests" / "mock_llm_service.py"
+    if not script_path.exists():
+        raise MockServerInstallError(
+            "mock server is test-only and repo-local. "
+            "If you're trying to use mock-server flags from a general install, "
+            "please fuck off back to a repository checkout where "
+            "`tests/mock_llm_service.py` actually exists.\n"
+            f"missing_path: {script_path}"
+        )
+    return script_path
+
+
+def _start_mock_server(script_path: Path, port: int) -> subprocess.Popen[str]:
+    return subprocess.Popen(
+        [sys.executable, str(script_path), str(port)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+
+def _wait_for_mock_server(
+    process: subprocess.Popen[str],
+    port: int,
+    timeout_seconds: float = 5.0,
+) -> None:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if process.poll() is not None:
+            stdout, stderr = process.communicate()
+            raise RuntimeError(
+                "mock server failed to start: "
+                f"returncode={process.returncode}\n"
+                f"stdout:\n{stdout or '<empty>'}\n"
+                f"stderr:\n{stderr or '<empty>'}"
+            )
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.2):
+                return
+        except OSError:
+            time.sleep(0.1)
+
+    process.terminate()
+    stdout, stderr = process.communicate(timeout=2)
+    raise RuntimeError(
+        "mock server did not become ready before timeout: "
+        f"port={port}\n"
+        f"stdout:\n{stdout or '<empty>'}\n"
+        f"stderr:\n{stderr or '<empty>'}"
+    )
+
+
+def _config_with_mock_server(cfg: Config, port: int) -> Config:
+    return Config(
+        model="mock-shakespeare",
+        base_url=f"http://127.0.0.1:{port}/v1",
+        api_key_env=cfg.api_key_env,
+        api_key_file=cfg.api_key_file,
+        user_display_name=cfg.user_display_name,
+        timeout_seconds=cfg.timeout_seconds,
+        max_preflight_tokens=cfg.max_preflight_tokens,
+        sandbox_root=cfg.sandbox_root,
+        max_attachment_bytes=cfg.max_attachment_bytes,
+    )
+
+
+def _parse_args(
+    argv: list[str],
+) -> tuple[bool, str | None, bool, str | None, int | None, str | None]:
     yolo = False
     prompt = None
     show_help = False
     command = None
+    mock_port: int | None = None
+    mock_prompt: str | None = None
 
     args = list(argv)
     if args and args[0] == "yolo":
@@ -67,6 +150,22 @@ def _parse_args(argv: list[str]) -> tuple[bool, str | None, bool, str | None]:
         elif arg == "--doctor":
             command = "doctor"
             i += 1
+        elif arg in {"-m", "--mock-server"}:
+            command = "mock-server"
+            if i + 1 < len(args) and args[i + 1].isdigit():
+                mock_port = int(args[i + 1])
+                i += 2
+            else:
+                i += 1
+        elif arg == "-tm":
+            command = "test-mock"
+            if i + 1 < len(args) and args[i + 1].isdigit():
+                mock_port = int(args[i + 1])
+                i += 1
+            if i + 1 >= len(args):
+                raise SystemExit("-tm requires a prompt string")
+            mock_prompt = args[i + 1]
+            i += 2
         elif arg == "-t":
             if i + 1 >= len(args):
                 raise SystemExit("-t requires a prompt string")
@@ -75,11 +174,11 @@ def _parse_args(argv: list[str]) -> tuple[bool, str | None, bool, str | None]:
         else:
             raise SystemExit(f"unknown arg: {arg}")
 
-    return yolo, prompt, show_help, command
+    return yolo, prompt, show_help, command, mock_port, mock_prompt
 
 
 def main() -> None:
-    yolo, single_prompt, show_help, command = _parse_args(sys.argv[1:])
+    yolo, single_prompt, show_help, command, mock_port, mock_prompt = _parse_args(sys.argv[1:])
     workspace_root = Path.cwd().resolve()
     bootstrap_local_files(workspace_root)
 
@@ -88,6 +187,8 @@ def main() -> None:
         return
 
     def fail(message: str) -> None:
+        # Do not sanitize or paraphrase startup/request failures here. The raw
+        # message is usually the only useful thing the user has.
         print(f"error: {message}", file=sys.stderr, flush=True)
         raise SystemExit(1)
 
@@ -99,7 +200,48 @@ def main() -> None:
         open_config_in_editor(workspace_root)
         return
 
+    if command == "mock-server":
+        argv_backup: list[str] | None = None
+        try:
+            script_path = _repo_mock_server_script(workspace_root)
+            # Test-only convenience command. Run the repo-local script verbatim
+            # instead of trying to hide or abstract away the test harness.
+            argv_backup = sys.argv[:]
+            sys.argv = [str(script_path)]
+            if mock_port is not None:
+                sys.argv.append(str(mock_port))
+            runpy.run_path(str(script_path), run_name="__main__")
+        except MockServerInstallError as exc:
+            fail(str(exc))
+        finally:
+            if argv_backup is not None:
+                sys.argv = argv_backup
+        return
+
     cfg = load_config(workspace_root)
+
+    if command == "test-mock":
+        process: subprocess.Popen[str] | None = None
+        port = mock_port or 8008
+        try:
+            script_path = _repo_mock_server_script(workspace_root)
+            process = _start_mock_server(script_path, port)
+            _wait_for_mock_server(process, port)
+            mock_cfg = _config_with_mock_server(cfg, port)
+            state, llm, sandbox = build_state(mock_cfg, yolo=yolo)
+            result = run_prompt(state, llm, sandbox, mock_prompt or "")
+            print(result.to_cli_text())
+        except Exception as exc:
+            fail(str(exc))
+        finally:
+            if process is not None and process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=2)
+        return
 
     if command == "doctor":
         report = run_doctor(cfg, workspace_root)
@@ -113,7 +255,8 @@ def main() -> None:
 
     if single_prompt:
         try:
-            print(run_prompt(state, llm, sandbox, single_prompt))
+            result = run_prompt(state, llm, sandbox, single_prompt)
+            print(result.to_cli_text())
         except Exception as exc:
             fail(str(exc))
         return
@@ -139,7 +282,8 @@ def main() -> None:
             return
 
         try:
-            print(run_prompt(state, llm, sandbox, text))
+            result = run_prompt(state, llm, sandbox, text)
+            print(result.to_cli_text())
         except Exception as exc:
             print(f"error: {exc}", file=sys.stderr, flush=True)
 

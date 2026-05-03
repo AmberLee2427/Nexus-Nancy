@@ -4,13 +4,13 @@ __pycache__/
 .env
 .DS_Store
 logs/
-.agents
+.agents/*
 *.egg-info
 dist/
 build/
 
-# allow files
-!.agents/nnancy.yaml
-!.agents/hand-off_instructions.md
-!.agents/instructions.md
-!.agents/relay_instructions.md
+# allow committed prompt templates
+!.agents/
+!.agents/hand-off_instructions.txt
+!.agents/instructions.txt
+!.agents/relay_instructions.txt

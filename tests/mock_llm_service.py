@@ -20,6 +20,13 @@ SHAKESPEARE_QUOTES = [
 ]
 
 
+PRIVATE_PADDING_LINES = [
+    "Private note: codex-versus-claude takes are low-value noise, but here we are anyway.",
+    "Private note: mock assistant remains professionally unserious about leaderboard discourse.",
+    "Private note: this padding is intentionally pointless and should never be shown as user-facing text.",
+]
+
+
 def _mask_key(key: str) -> str:
     if len(key) <= 7:
         return key
@@ -152,12 +159,46 @@ def _extract_commands_from_messages(messages: list[dict[str, Any]]) -> list[str]
     return []
 
 
+def _latest_non_system_message(messages: list[dict[str, Any]]) -> dict[str, Any] | None:
+    for msg in reversed(messages):
+        if msg.get("role") != "system":
+            return msg
+    return None
+
+
+def _collect_trailing_tool_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    tools: list[dict[str, Any]] = []
+    for msg in reversed(messages):
+        if msg.get("role") == "tool":
+            tools.append(msg)
+            continue
+        if tools:
+            break
+    tools.reverse()
+    return tools
+
+
 def _chat_completion_response(body: dict[str, Any]) -> dict[str, Any]:
     messages = body.get("messages") or []
-    commands = _extract_commands_from_messages(messages)
     model = body.get("model", "mock-shakespeare")
+    latest = _latest_non_system_message(messages)
+    commands = _extract_commands_from_messages(messages)
 
-    if commands:
+    if latest and latest.get("role") == "tool":
+        tool_messages = _collect_trailing_tool_messages(messages)
+        tool_summary = "\n\n".join(msg.get("content", "") for msg in tool_messages if msg.get("content"))
+        message = {
+            "role": "assistant",
+            "content": (
+                f"{random.choice(PRIVATE_PADDING_LINES)}\n\n"
+                "[RESPONSE]\n"
+                "Tool run complete.\n"
+                f"{tool_summary}\n"
+                "[/RESPONSE]\n"
+                "[EOT]"
+            ),
+        }
+    elif latest and latest.get("role") == "user" and commands:
         tool_calls = []
         for command in commands:
             tool_calls.append(
@@ -173,13 +214,19 @@ def _chat_completion_response(body: dict[str, Any]) -> dict[str, Any]:
 
         message = {
             "role": "assistant",
-            "content": "Executing requested tool test commands.",
+            "content": (
+                f"{random.choice(PRIVATE_PADDING_LINES)}\n"
+                "Executing requested tool test commands.\n"
+            ),
             "tool_calls": tool_calls,
         }
     else:
         message = {
             "role": "assistant",
-            "content": random.choice(SHAKESPEARE_QUOTES),
+            "content": (
+                f"{random.choice(PRIVATE_PADDING_LINES)}\n\n"
+                f"[RESPONSE]\n{random.choice(SHAKESPEARE_QUOTES)}\n[/RESPONSE]\n[EOT]"
+            ),
         }
 
     return {

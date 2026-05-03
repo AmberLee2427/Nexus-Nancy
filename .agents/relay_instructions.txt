@@ -1,0 +1,16 @@
+{{instructions}}
+
+## Handoff details
+
+You are taking over from a previous agent. 
+This is their summary of the project so far:
+
+----------------------------------------------
+{{summary}}
+----------------------------------------------
+
+The following todo items remain:
+
+----------------------------------------------
+{{todo}}
+----------------------------------------------

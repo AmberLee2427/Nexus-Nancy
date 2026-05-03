@@ -29,6 +29,8 @@ def _bash_syntax_ok(command: str) -> tuple[bool, str]:
     try:
         bashlex.parse(command)
     except Exception as exc:
+        # Bubble the parser complaint through unchanged so syntax failures stay
+        # specific instead of being collapsed into "bad command."
         return False, f"bash parser rejected command ({exc})"
 
     proc = subprocess.run(
@@ -51,6 +53,9 @@ class SandboxPolicy:
         if not self.allowlist_substrings:
             return False
         return any(item in command for item in self.allowlist_substrings)
+
+    def is_allowlisted(self, command: str) -> bool:
+        return self._is_allowlisted(command)
 
     def validate(self, command: str) -> tuple[bool, str]:
         if self.yolo:
@@ -86,6 +91,8 @@ class SandboxPolicy:
         try:
             tokens = shlex.split(stripped)
         except Exception as exc:
+            # Keep the shell tokenizer error visible; it is often the only clue
+            # about what quoting or escaping went wrong.
             return False, f"blocked by sandbox: parse failure ({exc})"
 
         if not tokens:

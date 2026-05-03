@@ -35,9 +35,17 @@ nnancy = "nexus_nancy.cli:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/nexus_nancy"]
 
+[tool.hatch.build.targets.wheel.force-include]
+".agents/instructions.txt" = "nexus_nancy/default_agents/instructions.txt"
+".agents/relay_instructions.txt" = "nexus_nancy/default_agents/relay_instructions.txt"
+".agents/hand-off_instructions.txt" = "nexus_nancy/default_agents/hand-off_instructions.txt"
+
 [tool.hatch.build.targets.sdist]
 include = [
   "src/nexus_nancy",
+  ".agents/instructions.txt",
+  ".agents/relay_instructions.txt",
+  ".agents/hand-off_instructions.txt",
   "README.md",
   "pyproject.toml",
   "docs",

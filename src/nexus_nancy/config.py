@@ -1,17 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
 import os
 import shlex
 import subprocess
 import sys
-
-
-DEFAULT_SYSTEM_PROMPT = (
-    "You are Nexus-Nancy, a lightweight terminal coding assistant. "
-    "Be concise, deterministic, and practical. Use tools only when needed."
-)
+from dataclasses import dataclass
+from importlib import resources
+from pathlib import Path
 
 
 @dataclass
@@ -43,6 +38,14 @@ def sandbox_allowlist_path(workspace_root: Path) -> Path:
     return agents_dir(workspace_root) / "sandbox_allowlist.txt"
 
 
+def relay_instructions_path(workspace_root: Path) -> Path:
+    return agents_dir(workspace_root) / "relay_instructions.txt"
+
+
+def handoff_instructions_path(workspace_root: Path) -> Path:
+    return agents_dir(workspace_root) / "hand-off_instructions.txt"
+
+
 def default_config_yaml() -> str:
     return """model: gpt-5.4-mini
 base_url: https://api.openai.com/v1
@@ -64,9 +67,16 @@ def bootstrap_local_files(workspace_root: Path) -> None:
     if not cfg.exists():
         cfg.write_text(default_config_yaml(), encoding="utf-8")
 
-    instr = instructions_path(workspace_root)
-    if not instr.exists():
-        instr.write_text(DEFAULT_SYSTEM_PROMPT + "\n", encoding="utf-8")
+    # Prompt templates ship inside the installed package and are copied into the
+    # user's working directory on first run. We do not invent fallback prompt
+    # text at runtime.
+    _copy_bundled_agent_template_if_missing("instructions.txt", instructions_path(workspace_root))
+    _copy_bundled_agent_template_if_missing(
+        "relay_instructions.txt", relay_instructions_path(workspace_root)
+    )
+    _copy_bundled_agent_template_if_missing(
+        "hand-off_instructions.txt", handoff_instructions_path(workspace_root)
+    )
 
     allowlist = sandbox_allowlist_path(workspace_root)
     if not allowlist.exists():
@@ -78,8 +88,31 @@ def bootstrap_local_files(workspace_root: Path) -> None:
     secrets_dir = agents_dir(workspace_root) / "secrets"
     secrets_dir.mkdir(parents=True, exist_ok=True)
 
-    tracsripts_dir = agents_dir(workspace_root) / "tracsripts"
-    tracsripts_dir.mkdir(parents=True, exist_ok=True)
+    transcripts_dir = agents_dir(workspace_root) / "transcripts"
+    transcripts_dir.mkdir(parents=True, exist_ok=True)
+
+
+def _copy_bundled_agent_template_if_missing(template_name: str, destination: Path) -> None:
+    if destination.exists():
+        return
+    destination.write_text(_bundled_agent_template_text(template_name), encoding="utf-8")
+
+
+def _bundled_agent_template_text(template_name: str) -> str:
+    packaged = resources.files("nexus_nancy").joinpath("default_agents").joinpath(template_name)
+    if packaged.is_file():
+        return packaged.read_text(encoding="utf-8")
+
+    repo_source = Path(__file__).resolve().parents[2] / ".agents" / template_name
+    if repo_source.exists():
+        return repo_source.read_text(encoding="utf-8")
+
+    raise RuntimeError(
+        "Missing bundled agent template.\n"
+        f"template_name: {template_name}\n"
+        f"packaged_path: {packaged}\n"
+        f"repo_fallback_path: {repo_source}"
+    )
 
 
 def load_config(workspace_root: Path) -> Config:
@@ -91,6 +124,7 @@ def load_config(workspace_root: Path) -> Config:
     for key, val in raw.items():
         if hasattr(cfg, key):
             setattr(cfg, key, val)
+    _resolve_config_paths(cfg, workspace_root)
     return cfg
 
 
@@ -113,9 +147,41 @@ def _parse_flat_yaml(text: str) -> dict[str, object]:
     return data
 
 
+def _resolve_config_path_value(workspace_root: Path, value: str) -> str:
+    raw = _unquote(value.strip())
+    candidate = Path(raw).expanduser()
+    if not candidate.is_absolute():
+        candidate = (workspace_root / candidate).resolve()
+    else:
+        candidate = candidate.resolve()
+    return str(candidate)
+
+
+def _resolve_config_paths(cfg: Config, workspace_root: Path) -> None:
+    # Normalize path-like config values at load time so every downstream caller
+    # sees real absolute paths instead of ambiguous workspace-relative shorthands.
+    cfg.api_key_file = _resolve_config_path_value(workspace_root, str(cfg.api_key_file))
+    cfg.sandbox_root = _resolve_config_path_value(workspace_root, str(cfg.sandbox_root))
+
+
 def load_instructions(workspace_root: Path) -> str:
     bootstrap_local_files(workspace_root)
-    return instructions_path(workspace_root).read_text(encoding="utf-8").strip()
+    path = instructions_path(workspace_root)
+    if not path.exists():
+        raise RuntimeError(
+            "Missing system prompt file. Refusing to invent one.\n"
+            f"expected_path: {path}"
+        )
+    # Instructions are loaded verbatim from the workspace. This project does
+    # not try to hide the prompt or launder it into something safer-looking.
+    return path.read_text(encoding="utf-8").strip()
+
+
+def render_prompt_template(template: str, variables: dict[str, str]) -> str:
+    rendered = template
+    for key, value in variables.items():
+        rendered = rendered.replace(f"{{{{{key}}}}}", value)
+    return rendered
 
 
 def load_sandbox_allowlist(workspace_root: Path) -> list[str]:
@@ -213,6 +279,8 @@ def replace_api_key(cfg: Config, workspace_root: Path, new_key: str) -> Path:
 
     key_file = api_key_path(cfg, workspace_root)
     key_file.parent.mkdir(parents=True, exist_ok=True)
+    # Secrets are stored as plain local files by design. We do permissions
+    # hygiene, but we do not pretend this is anything other than a file write.
     key_file.write_text(key + "\n", encoding="utf-8")
     try:
         os.chmod(key_file, 0o600)

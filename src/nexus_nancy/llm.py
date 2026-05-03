@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 from urllib.parse import urlparse
 
@@ -34,7 +35,7 @@ class LLMClient:
 
     def _validate_tools(self, tools: list[dict[str, Any]]) -> None:
         if not tools:
-            raise RuntimeError("No tools provided in payload. Refusing request.")
+            return
 
         names: list[str] = []
         for item in tools:
@@ -91,32 +92,76 @@ class LLMClient:
         self._validate_tools(tools)
         self._validate_messages(messages)
 
-    def chat(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> dict[str, Any]:
-        self._validate_request(messages, tools)
+    def _api_key_preview(self) -> str:
+        if not self.api_key:
+            return "<missing>"
+        if len(self.api_key) <= 7:
+            return self.api_key
+        return f"{self.api_key[:8]}***{self.api_key[-4:]}"
+
+    def _format_error_dict(self, data: dict[str, Any]) -> str:
+        # Keep error payloads as plain JSON text. Scientists can read structured
+        # errors; this code should not "help" by flattening, truncating, or
+        # rewriting them into friendly summaries.
+        return json.dumps(data, indent=4, ensure_ascii=False, default=str)
+
+    def chat(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        tool_specs = tools or []
+        self._validate_request(messages, tool_specs)
         payload: dict[str, Any] = {
             "model": self.cfg.model,
             "messages": messages,
-            "tools": tools,
-            "tool_choice": "auto",
             "temperature": 0,
         }
+        if tool_specs:
+            payload["tools"] = tool_specs
+            payload["tool_choice"] = "auto"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
+        request_url = f"{self.cfg.base_url.rstrip('/')}/chat/completions"
         with httpx.Client(timeout=self.cfg.timeout_seconds) as client:
             try:
                 resp = client.post(
-                    f"{self.cfg.base_url.rstrip('/')}/chat/completions",
+                    request_url,
                     headers=headers,
                     json=payload,
                 )
                 resp.raise_for_status()
                 return resp.json()
             except httpx.HTTPStatusError as exc:
+                # Show the provider's body verbatim. The full structured error is
+                # the product here; replacing it with a cute summary would make
+                # debugging materially worse.
                 detail = exc.response.text.strip()
+                if not detail:
+                    detail = self._format_error_dict(
+                        {
+                            "status_code": exc.response.status_code,
+                            "reason_phrase": exc.response.reason_phrase,
+                            "request_url": request_url,
+                        }
+                    )
                 raise RuntimeError(
-                    f"LLM request failed with HTTP {exc.response.status_code}: {detail[:300]}"
+                    f"LLM request failed with HTTP {exc.response.status_code}: {detail}"
                 ) from exc
             except httpx.HTTPError as exc:
-                raise RuntimeError(f"LLM request failed: {exc}") from exc
+                # Transport failures rarely come with a server body, so we emit
+                # our own raw dict with the exact connection context. Again: no
+                # simplification, no coddling, no one-line euphemisms.
+                detail = self._format_error_dict(
+                    {
+                        "error_type": type(exc).__name__,
+                        "message": str(exc),
+                        "request_url": request_url,
+                        "base_url": self.cfg.base_url,
+                        "api_key_source": self.api_key_source,
+                        "api_key_preview": self._api_key_preview(),
+                    }
+                )
+                raise RuntimeError(f"LLM request failed: {detail}") from exc

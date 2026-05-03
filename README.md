@@ -25,8 +25,12 @@ pip install -e .
 On first run in any directory, Nexus-Nancy creates local files in `.agents/`:
 
 - `.agents/nnancy.yaml`
-- `.agents/instructions.txt`
 - `.agents/sandbox_allowlist.txt`
+- `.agents/instructions.txt`
+- `.agents/relay_instructions.txt`
+- `.agents/hand-off_instructions.txt`
+
+The prompt templates are bundled inside the installed package and copied into the working directory on first run. Nexus-Nancy does not invent ad hoc fallback prompt text at runtime.
 
 API key resolution order:
 
@@ -36,6 +40,7 @@ API key resolution order:
 For shared environments, using the local key file is recommended.
 
 Before any provider call, Nexus-Nancy runs strict preflight validation: API key/base URL sanity, required message structure (system + user), tool spec integrity (including `bash`), and request-size guard via `max_preflight_tokens`.
+The live system prompt is read from `.agents/instructions.txt` and rendered at runtime, including a dynamically generated tools block.
 
 Set `user_display_name` in `.agents/nnancy.yaml` to control the user label shown in the TUI transcript (default: `USER`).
 
@@ -72,7 +77,10 @@ Each TUI session gets an `id` shown in that status line.
 
 Transcripts are always saved for posterity at:
 
-- `.agents/tracsripts/<id>.txt`
+- `.agents/transcripts/<id>.txt`
+
+These transcripts and the `logs/session-*.log` files are plain local files.
+Anyone with access to the workspace can read them.
 
 Use `Ctrl+Y` in TUI to show copy mode info with the current transcript path.
 `Ctrl+Y` suspends the TUI and opens the transcript in your terminal (`less` if available, else `cat`) so native terminal text selection/copy works, then returns to the app.
@@ -88,6 +96,13 @@ Inside the prompt:
 - `/key NEW_API_KEY` replaces API key file contents
 - `@relative/path` inlines file content into your prompt
 
+Assistant protocol:
+
+- User-visible assistant text must be inside `[RESPONSE]...[/RESPONSE]`
+- Any other assistant text is treated as private raw/debug output
+- Each completed assistant turn must end with `[EOT]`
+- Tool calls must use JSON arguments that exactly match the surfaced tool schema
+
 In the Textual TUI, you can also run `/key` with no argument to set the key via hidden prompts (value + confirmation) without echoing the key to screen.
 
 ## Notes
@@ -95,4 +110,6 @@ In the Textual TUI, you can also run `/key` with no argument to set the key via 
 - Tool execution is local.
 - Sandbox mode is default.
 - Chat logs are written to `logs/session-*.log`.
+- In the TUI, only `[RESPONSE]` blocks are shown as assistant replies; non-response assistant text and tool output are shown as collapsed raw/debug blocks.
+- Tool calls outside the allowlist prompt for `yes`, `no`, or `respond` approval in sandbox mode.
 - `nnancy yolo` exists but is intentionally not advertised in help output.

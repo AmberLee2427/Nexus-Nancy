@@ -30,10 +30,13 @@ class SessionState:
             log=TextLog(logs_dir),
             messages=[{"role": "system", "content": system_prompt}],
         )
+        # The literal system prompt is part of the session record. It should be
+        # logged exactly so behavior can be reconstructed later.
         state.log.write("system", system_prompt)
         return state
 
     def reset(self, logs_dir: Path) -> None:
         self.log = TextLog(logs_dir)
         self.messages = [{"role": "system", "content": self.system_prompt}]
+        # New sessions restart from the real system prompt, not a summary of it.
         self.log.write("system", self.system_prompt)

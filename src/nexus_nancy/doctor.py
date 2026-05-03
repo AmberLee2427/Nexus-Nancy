@@ -7,7 +7,15 @@ from pathlib import Path
 
 import httpx
 
-from .config import Config, config_path, instructions_path, resolve_api_key, sandbox_allowlist_path
+from .config import (
+    Config,
+    config_path,
+    handoff_instructions_path,
+    instructions_path,
+    relay_instructions_path,
+    resolve_api_key,
+    sandbox_allowlist_path,
+)
 from .llm import LLMClient
 from .tools import TOOL_SPECS
 
@@ -18,6 +26,8 @@ class DoctorReport:
     lines: list[str]
 
     def render(self) -> str:
+        # Doctor output is meant to be copied into terminals/issues verbatim.
+        # Keep the fielded lines blunt and complete rather than "friendly."
         return "\n".join(self.lines)
 
 
@@ -39,11 +49,15 @@ def run_doctor(cfg: Config, workspace_root: Path) -> DoctorReport:
 
     cfg_path = config_path(workspace_root)
     instr_path = instructions_path(workspace_root)
+    relay_path = relay_instructions_path(workspace_root)
+    handoff_path = handoff_instructions_path(workspace_root)
 
     checks: list[tuple[str, bool, str]] = []
     checks.append(("workspace", workspace_root.exists(), str(workspace_root)))
     checks.append(("config_file", cfg_path.exists(), str(cfg_path)))
     checks.append(("instructions_file", instr_path.exists(), str(instr_path)))
+    checks.append(("relay_instructions_file", relay_path.exists(), str(relay_path)))
+    checks.append(("handoff_instructions_file", handoff_path.exists(), str(handoff_path)))
 
     key, key_source = resolve_api_key(cfg, workspace_root)
     checks.append(("api_key", bool(key), f"source={key_source}; value={_masked_key(key)}"))
@@ -74,6 +88,7 @@ def run_doctor(cfg: Config, workspace_root: Path) -> DoctorReport:
         url_info = f"{models_url} -> HTTP {resp.status_code}"
     except Exception as exc:  # pragma: no cover
         url_ok = False
+        # Preserve the raw exception text. Doctor is diagnostic output, not UX.
         url_info = f"{models_url} -> error: {exc}"
     checks.append(("base_url_health", url_ok, url_info))
 
@@ -94,6 +109,8 @@ def run_doctor(cfg: Config, workspace_root: Path) -> DoctorReport:
         )
     except Exception as exc:  # pragma: no cover
         preflight_ok = False
+        # Preflight failures should surface the exact message that blocked the
+        # request so users can act on it directly.
         preflight_info = str(exc)
     checks.append(("request_preflight", preflight_ok, preflight_info))
 

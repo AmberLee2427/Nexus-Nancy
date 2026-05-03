@@ -1,15 +1,122 @@
 from __future__ import annotations
 
 import json
+import re
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
-from .config import Config, load_instructions, load_sandbox_allowlist, open_config_in_editor, replace_api_key
+from .config import (
+    Config,
+    handoff_instructions_path,
+    load_instructions,
+    load_sandbox_allowlist,
+    open_config_in_editor,
+    relay_instructions_path,
+    render_prompt_template,
+    replace_api_key,
+)
 from .llm import LLMClient
 from .sandbox import SandboxPolicy
 from .session import SessionState
-from .token_count import estimate_context_tokens
-from .tools import TOOL_SPECS, execute_tool
+from .tools import TOOL_SPECS, execute_tool, render_tools_block, validate_tool_arguments
+
+
+EOT_TOKEN = "[EOT]"
+MAX_NO_TOOL_ASSISTANT_MESSAGES_WITHOUT_EOT = 2
+RESPONSE_BLOCK_RE = re.compile(r"\[RESPONSE\](.*?)\[/RESPONSE\]", re.DOTALL)
+
+
+@dataclass
+class ParsedAssistantContent:
+    response_blocks: list[str]
+    private_text: str
+    has_eot: bool
+
+
+@dataclass
+class ToolApprovalRequest:
+    call_id: str
+    name: str
+    arguments_text: str
+    arguments: dict[str, Any]
+
+
+@dataclass
+class ToolApprovalDecision:
+    action: str
+    response_text: str = ""
+
+
+@dataclass
+class ToolCallRecord:
+    name: str
+    arguments_text: str
+    arguments: dict[str, Any]
+    status: str
+    output: str
+
+    @property
+    def title(self) -> str:
+        return f"{self.name} {self.arguments_text}"
+
+
+@dataclass
+class TranscriptEvent:
+    kind: str
+    text: str
+    title: str
+
+
+@dataclass
+class PromptResult:
+    response_blocks: list[str] = field(default_factory=list)
+    private_blocks: list[str] = field(default_factory=list)
+    tool_calls: list[ToolCallRecord] = field(default_factory=list)
+    system_messages: list[str] = field(default_factory=list)
+    transcript_events: list[TranscriptEvent] = field(default_factory=list)
+
+    def add_system(self, text: str) -> None:
+        self.system_messages.append(text)
+        self.transcript_events.append(TranscriptEvent(kind="system", title="SYS", text=text))
+
+    def add_response(self, text: str) -> None:
+        self.response_blocks.append(text)
+        self.transcript_events.append(TranscriptEvent(kind="response", title="NANCY", text=text))
+
+    def add_private(self, text: str, index: int) -> None:
+        self.private_blocks.append(text)
+        self.transcript_events.append(TranscriptEvent(kind="raw", title=f"RAW {index}", text=text))
+
+    def add_tool(self, record: ToolCallRecord) -> None:
+        self.tool_calls.append(record)
+        text = "\n".join(
+            [
+                f"status: {record.status}",
+                f"tool: {record.name}",
+                f"arguments: {record.arguments_text}",
+                "output:",
+                record.output,
+            ]
+        ).strip()
+        self.transcript_events.append(
+            TranscriptEvent(kind="debug", title=f"TOOL {record.status.upper()}", text=text)
+        )
+
+    @property
+    def response_text(self) -> str:
+        return "\n\n".join(block for block in self.response_blocks if block.strip()).strip()
+
+    def to_cli_text(self) -> str:
+        chunks: list[str] = []
+        if self.response_text:
+            chunks.append(self.response_text)
+        if self.system_messages:
+            chunks.append("\n".join(self.system_messages))
+        return "\n\n".join(chunk for chunk in chunks if chunk.strip()).strip()
+
+
+ToolApprovalHandler = Callable[[ToolApprovalRequest], ToolApprovalDecision]
 
 
 def _attach_files(text: str, workspace_root: Path, max_bytes: int) -> str:
@@ -32,10 +139,160 @@ def _attach_files(text: str, workspace_root: Path, max_bytes: int) -> str:
     return text + "".join(appended)
 
 
-def _assistant_turn(state: SessionState, llm: LLMClient, sandbox: SandboxPolicy) -> str:
+def _extract_blocks(pattern: re.Pattern[str], text: str) -> list[str]:
+    return [match.strip() for match in pattern.findall(text) if match.strip()]
+
+
+def _parse_assistant_content(content: str) -> ParsedAssistantContent:
+    has_eot = EOT_TOKEN in content
+    stripped = content.replace(EOT_TOKEN, "")
+    response_blocks = _extract_blocks(RESPONSE_BLOCK_RE, stripped)
+    private_text = RESPONSE_BLOCK_RE.sub("", stripped)
+    private_text = private_text.strip()
+    return ParsedAssistantContent(
+        response_blocks=response_blocks,
+        private_text=private_text,
+        has_eot=has_eot,
+    )
+
+
+def _tool_requires_approval(name: str, args: dict[str, Any], sandbox: SandboxPolicy) -> bool:
+    if sandbox.yolo:
+        return False
+    if name == "bash":
+        command = str(args.get("command", ""))
+        return not sandbox.is_allowlisted(command)
+    return True
+
+
+def _handle_tool_call(
+    state: SessionState,
+    call: dict[str, Any],
+    sandbox: SandboxPolicy,
+    tool_approval: ToolApprovalHandler | None,
+) -> tuple[ToolCallRecord, dict[str, Any], str | None]:
+    name = call["function"]["name"]
+    args_text = call["function"].get("arguments") or "{}"
+    injected_user: str | None = None
+
+    try:
+        raw_args = json.loads(args_text)
+    except json.JSONDecodeError as exc:
+        # Tool argument failures should quote the real parser error. Do not
+        # replace this with a vague "invalid tool call" message.
+        output = f"error: tool arguments were not valid JSON ({exc})"
+        return (
+            ToolCallRecord(
+                name=name,
+                arguments_text=args_text,
+                arguments={},
+                status="error",
+                output=output,
+            ),
+            {"role": "tool", "tool_call_id": call["id"], "content": output},
+            None,
+        )
+
+    normalized_args, validation_error = validate_tool_arguments(name, raw_args)
+    if validation_error:
+        # Keep validator output explicit because the exact missing/wrong field is
+        # the actionable part.
+        output = f"error: {validation_error}"
+        return (
+            ToolCallRecord(
+                name=name,
+                arguments_text=args_text,
+                arguments=raw_args if isinstance(raw_args, dict) else {},
+                status="error",
+                output=output,
+            ),
+            {"role": "tool", "tool_call_id": call["id"], "content": output},
+            None,
+        )
+
+    assert normalized_args is not None
+
+    if _tool_requires_approval(name, normalized_args, sandbox) and tool_approval is not None:
+        decision = tool_approval(
+            ToolApprovalRequest(
+                call_id=call["id"],
+                name=name,
+                arguments_text=args_text,
+                arguments=normalized_args,
+            )
+        )
+        if decision.action == "deny":
+            # Approval decisions are part of the observable protocol history and
+            # should stay visible in plain text.
+            output = f"error: user denied tool call '{name}'"
+            return (
+                ToolCallRecord(
+                    name=name,
+                    arguments_text=args_text,
+                    arguments=normalized_args,
+                    status="denied",
+                    output=output,
+                ),
+                {"role": "tool", "tool_call_id": call["id"], "content": output},
+                None,
+            )
+        if decision.action == "respond":
+            response_text = decision.response_text.strip()
+            if not response_text:
+                output = "error: user chose respond but supplied no response text"
+                return (
+                    ToolCallRecord(
+                        name=name,
+                        arguments_text=args_text,
+                        arguments=normalized_args,
+                        status="error",
+                        output=output,
+                    ),
+                    {"role": "tool", "tool_call_id": call["id"], "content": output},
+                    None,
+                )
+            output = "tool execution skipped: user responded instead"
+            injected_user = response_text
+            return (
+                ToolCallRecord(
+                    name=name,
+                    arguments_text=args_text,
+                    arguments=normalized_args,
+                    status="responded",
+                    output=output,
+                ),
+                {"role": "tool", "tool_call_id": call["id"], "content": output},
+                injected_user,
+            )
+
+    output = execute_tool(name, normalized_args, sandbox)
+    status = "executed" if not output.startswith("error:") else "error"
+    return (
+        ToolCallRecord(
+            name=name,
+            arguments_text=args_text,
+            arguments=normalized_args,
+            status=status,
+            output=output,
+        ),
+        {"role": "tool", "tool_call_id": call["id"], "content": output},
+        injected_user,
+    )
+
+
+def _assistant_turn(
+    state: SessionState,
+    llm: LLMClient,
+    sandbox: SandboxPolicy,
+    tool_approval: ToolApprovalHandler | None = None,
+) -> PromptResult:
+    result = PromptResult()
+    private_index = 0
+    no_tool_assistant_messages_without_eot = 0
+
     while True:
-        result = llm.chat(state.messages, TOOL_SPECS)
-        message = result["choices"][0]["message"]
+        api_result = llm.chat(state.messages, TOOL_SPECS)
+        message = api_result["choices"][0]["message"]
 
         content = message.get("content") or ""
         tool_calls = message.get("tool_calls") or []
@@ -46,26 +303,61 @@ def _assistant_turn(state: SessionState, llm: LLMClient, sandbox: SandboxPolicy)
         if tool_calls:
             assistant_msg["tool_calls"] = tool_calls
         state.messages.append(assistant_msg)
+        # Persist raw assistant content before any parsing/rendering so protocol
+        # mistakes remain inspectable in logs and transcripts.
+        state.log.write("assistant_raw", content or "<empty>")
 
-        if not tool_calls:
-            return content
+        parsed = _parse_assistant_content(content)
+        for block in parsed.response_blocks:
+            result.add_response(block)
+        if parsed.private_text:
+            private_text = parsed.private_text
+            for response_block in parsed.response_blocks:
+                private_text = private_text.replace(response_block, "")
+            private_text = private_text.strip()
+        else:
+            private_text = ""
+        if private_text:
+            private_index += 1
+            result.add_private(private_text, private_index)
 
-        for call in tool_calls:
-            name = call["function"]["name"]
-            args_text = call["function"].get("arguments") or "{}"
-            try:
-                args = json.loads(args_text)
-            except json.JSONDecodeError:
-                args = {}
-            tool_out = execute_tool(name, args, sandbox)
-            state.log.write(f"tool:{name}", tool_out)
-            state.messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": call["id"],
-                    "content": tool_out,
-                }
+        if (
+            state.cfg.model == "mock-shakespeare"
+            and not tool_calls
+            and (not parsed.response_blocks or not parsed.has_eot)
+        ):
+            raise RuntimeError(
+                "mock server protocol violation.\n"
+                "expected: user-facing text inside [RESPONSE]...[/RESPONSE] followed by [EOT]\n"
+                f"model: {state.cfg.model}\n"
+                f"base_url: {state.cfg.base_url}\n"
+                "raw_content:\n"
+                f"{content or '<empty>'}"
             )
+
+        if tool_calls:
+            no_tool_assistant_messages_without_eot = 0
+            for call in tool_calls:
+                record, tool_message, injected_user = _handle_tool_call(
+                    state, call, sandbox, tool_approval
+                )
+                result.add_tool(record)
+                # Tool output is recorded verbatim because command failures and
+                # provider/tool protocol mismatches are usually debugged from the
+                # exact plain-text output.
+                state.log.write(f"tool:{record.name}", record.output)
+                state.messages.append(tool_message)
+                if injected_user:
+                    state.messages.append({"role": "user", "content": injected_user})
+                    state.log.write("user", injected_user)
+            continue
+
+        if parsed.has_eot:
+            return result
+
+        no_tool_assistant_messages_without_eot += 1
+        if no_tool_assistant_messages_without_eot >= MAX_NO_TOOL_ASSISTANT_MESSAGES_WITHOUT_EOT:
+            return result
 
 
 def run_prompt(
@@ -73,60 +365,151 @@ def run_prompt(
     llm: LLMClient,
     sandbox: SandboxPolicy,
     user_text: str,
-) -> str:
-    if user_text.strip() == "/config":
+    *,
+    tool_approval: ToolApprovalHandler | None = None,
+) -> PromptResult:
+    command = user_text.strip()
+    if command == "/config":
         path = open_config_in_editor(state.workspace_root)
-        return f"opened config file: {path}"
+        return PromptResult(system_messages=[f"opened config file: {path}"])
 
-    if user_text.strip().startswith("/key"):
-        _, _, new_value = user_text.strip().partition(" ")
+    if command.startswith("/key"):
+        _, _, new_value = command.partition(" ")
         new_value = new_value.strip()
         if not new_value:
-            return "usage: /key YOUR_NEW_API_KEY"
+            return PromptResult(system_messages=["usage: /key YOUR_NEW_API_KEY"])
         path = replace_api_key(state.cfg, state.workspace_root, new_value)
-        return f"api key replaced in: {path}"
+        return PromptResult(system_messages=[f"api key replaced in: {path}"])
 
-    if user_text.strip() == "/new":
+    if command == "/new":
         state.reset(state.log.root)
-        return "started new session"
+        return PromptResult(system_messages=["started new session"])
 
-    if user_text.strip().startswith("/handoff"):
-        _, _, maybe_path = user_text.strip().partition(" ")
+    if command.startswith("/handoff"):
+        _, _, maybe_path = command.partition(" ")
         maybe_path = maybe_path.strip()
         if maybe_path:
             path = (state.workspace_root / maybe_path).resolve()
             if not path.exists():
-                return f"handoff file not found: {maybe_path}"
+                return PromptResult(system_messages=[f"handoff file not found: {maybe_path}"])
             data = json.loads(path.read_text(encoding="utf-8"))
             state.messages = data.get("messages", state.messages)
-            return f"loaded handoff from {maybe_path}"
+            return PromptResult(system_messages=[f"loaded handoff from {maybe_path}"])
 
-        payload = {
-            "model": state.cfg.model,
-            "base_url": state.cfg.base_url,
-            "system_prompt": state.system_prompt,
-            "messages": state.messages[-30:],
-        }
-        handoff_text = json.dumps(payload, indent=2)
-        out = state.log.root / "handoff.json"
-        out.write_text(handoff_text, encoding="utf-8")
-        return f"handoff saved to {out}"
+        chat_history = state.messages[:]
+        assistant_raw_blocks = [
+            m
+            for m in chat_history
+            if m.get("role") == "assistant" and m.get("content")
+        ]
+        tool_outputs = [m for m in chat_history if m.get("role") == "tool"]
+        if not assistant_raw_blocks:
+            assistant_raw_blocks = [{"role": "assistant", "content": "No assistant raw content present."}]
+        if not tool_outputs:
+            tool_outputs = [{"role": "tool", "content": "No tool call outputs present."}]
+
+        handoff_prompt = handoff_instructions_path(state.workspace_root).read_text(encoding="utf-8")
+
+        todo_path = state.workspace_root / ".agents/TODO.md"
+        todo = todo_path.read_text(encoding="utf-8").strip() if todo_path.exists() else "(No todo list present)"
+
+        summary_model = getattr(state.cfg, "summary_model", getattr(state.cfg, "model", "gpt-4o-mini"))
+        summary_cfg = Config(
+            model=summary_model,
+            **{key: value for key, value in state.cfg.__dict__.items() if key != "model"},
+        )
+        summary_llm = LLMClient(summary_cfg, state.workspace_root)
+        summary_messages = [
+            {"role": "system", "content": handoff_prompt},
+            {
+                "role": "user",
+                "content": (
+                    f"Here is the conversation history:\n\n{json.dumps(chat_history, indent=2)}"
+                    f"\n\nHere is the raw assistant content:\n\n{json.dumps(assistant_raw_blocks, indent=2)}"
+                    f"\n\nHere are the tool call outputs:\n\n{json.dumps(tool_outputs, indent=2)}"
+                    f"\n\nThe current todo list is:\n{todo}"
+                ),
+            },
+        ]
+        try:
+            summary_result = summary_llm.chat(summary_messages, tools=[])
+            summary_content = summary_result["choices"][0]["message"].get("content", "(No summary returned)")
+        except Exception as exc:
+            # Handoff failures should retain the exact provider/client message so
+            # users can see whether the summarizer failed locally or remotely.
+            summary_content = f"(Summary failed: {exc})"
+
+        summary_match = re.search(r"\[SUMMARY\](.*?)\[/SUMMARY\]", summary_content, re.DOTALL)
+        todo_match = re.search(r"\[TODO\](.*?)\[/TODO\]", summary_content, re.DOTALL)
+        summary_text = summary_match.group(1).strip() if summary_match else summary_content.strip()
+        todo_text = todo_match.group(1).strip() if todo_match else "(No todo found in summary)"
+
+        summary_path = state.workspace_root / ".agents/SUMMARY.md"
+        todo_path = state.workspace_root / ".agents/TODO.md"
+        summary_path.write_text(summary_text, encoding="utf-8")
+        todo_path.write_text(todo_text, encoding="utf-8")
+
+        relay_prompt_template = relay_instructions_path(state.workspace_root).read_text(
+            encoding="utf-8"
+        )
+        relay_prompt = render_prompt_template(
+            relay_prompt_template,
+            {
+                "instructions": state.system_prompt,
+                "summary": summary_text,
+                "todo": todo_text,
+            },
+        )
+        logs_dir = state.workspace_root / "logs"
+        new_state = SessionState.create(state.cfg, relay_prompt, state.workspace_root, logs_dir)
+        new_state.messages.append({"role": "user", "content": f"[SUMMARY]\n{summary_text}\n[/SUMMARY]"})
+        new_state.messages.append({"role": "user", "content": f"[TODO]\n{todo_text}\n[/TODO]"})
+        state.cfg = new_state.cfg
+        state.system_prompt = new_state.system_prompt
+        state.workspace_root = new_state.workspace_root
+        state.log = new_state.log
+        state.messages = new_state.messages
+        return PromptResult(
+            system_messages=[
+                "Handoff complete. Summary and todo saved. New session started with relay prompt."
+            ]
+        )
 
     enriched = _attach_files(user_text, state.workspace_root, state.cfg.max_attachment_bytes)
     state.messages.append({"role": "user", "content": enriched})
+    # Log the expanded user message, not a cleaned version, so attachments and
+    # inline prompt context can be audited after the fact.
     state.log.write("user", enriched)
 
-    answer = _assistant_turn(state, llm, sandbox)
-    state.log.write("assistant", answer)
+    answer = _assistant_turn(state, llm, sandbox, tool_approval=tool_approval)
+    if answer.response_text:
+        # Visible assistant text gets its own log channel, but the raw assistant
+        # content above remains authoritative for debugging.
+        state.log.write("assistant_visible", answer.response_text)
+    for note in answer.system_messages:
+        state.log.write("system", note)
     return answer
 
 
 def build_state(cfg: Config, yolo: bool) -> tuple[SessionState, LLMClient, SandboxPolicy]:
     workspace_root = Path.cwd().resolve()
     logs_dir = workspace_root / "logs"
-    instructions = load_instructions(workspace_root)
+    instructions_template = load_instructions(workspace_root)
+    instructions = render_prompt_template(
+        instructions_template,
+        {
+            "user_display_name": cfg.user_display_name,
+            "sandbox_root": cfg.sandbox_root,
+            "tools": render_tools_block(),
+        },
+    )
     state = SessionState.create(cfg, instructions, workspace_root, logs_dir)
     llm = LLMClient(cfg, workspace_root)
     allowlist = load_sandbox_allowlist(workspace_root)
-    sandbox = SandboxPolicy(root=workspace_root, yolo=yolo, allowlist_substrings=allowlist)
+    sandbox_root = Path(cfg.sandbox_root).expanduser()
+    if not sandbox_root.is_absolute():
+        sandbox_root = (workspace_root / sandbox_root).resolve()
+    else:
+        sandbox_root = sandbox_root.resolve()
+    sandbox = SandboxPolicy(root=sandbox_root, yolo=yolo, allowlist_substrings=allowlist)
     return state, llm, sandbox
