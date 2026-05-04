@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.1.0] - 2026-05-04
+
+### Added
+- [Add new features here]
+
+### Changed
+- [Add changes here]
+
+### Fixed
+- [Add bug fixes here]
+
+### Security
+- [Add security fixes here]
+
+
 ## [1.0.4] - 2026-05-04
 
 ### Added

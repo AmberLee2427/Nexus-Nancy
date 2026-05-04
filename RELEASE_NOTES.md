@@ -1,8 +1,8 @@
-# Gulls v1.0.4 Release Notes
+# Gulls v1.1.0 Release Notes
 
 **Release Date:** 2026-05-04
 
-## Patch Release
+## Minor Release
 
 
 ### Added
@@ -39,4 +39,4 @@ See [CHANGELOG.md](CHANGELOG.md) for the complete list of changes.
 
 ---
 
-**Previous Release:** v1.0.3
+**Previous Release:** v1.1.0
