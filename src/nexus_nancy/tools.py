@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
+import sys
 from dataclasses import dataclass
+from importlib import metadata
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 from .sandbox import SandboxPolicy
 
@@ -14,6 +17,15 @@ class ToolDefinition:
     name: str
     description: str
     parameters: dict[str, Any]
+    # The actual implementation function.
+    # Must accept (**args, sandbox=SandboxPolicy).
+    handler: Any = None
+
+    def __post_init__(self):
+        if self.handler is None:
+            # Core tools are handled in the legacy execute_tool loop for now,
+            # but plugins must provide a handler.
+            pass
 
     def to_openai_spec(self) -> dict[str, Any]:
         return {
@@ -26,69 +38,150 @@ class ToolDefinition:
         }
 
 
-TOOL_DEFINITIONS: tuple[ToolDefinition, ...] = (
-    ToolDefinition(
-        name="bash",
-        description="Run a shell command with zsh -lc inside the local sandbox root.",
-        parameters={
-            "type": "object",
-            "properties": {
-                "command": {
-                    "type": "string",
-                    "description": "Shell command to execute locally.",
-                },
-            },
-            "required": ["command"],
-            "additionalProperties": False,
-        },
-    ),
-    ToolDefinition(
-        name="notebook_read",
-        description="Read notebook cells and return a plain text summary.",
-        parameters={
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Workspace-relative path to the notebook.",
-                },
-                "max_cells": {
-                    "type": "integer",
-                    "description": "Maximum number of cells to summarize.",
-                    "default": 20,
-                },
-            },
-            "required": ["path"],
-            "additionalProperties": False,
-        },
-    ),
-    ToolDefinition(
-        name="notebook_set_cell",
-        description="Replace the source of a code cell in a notebook by index.",
-        parameters={
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Workspace-relative path to the notebook.",
-                },
-                "cell_index": {
-                    "type": "integer",
-                    "description": "Zero-based index of the code cell to replace.",
-                },
-                "source": {
-                    "type": "string",
-                    "description": "Full replacement source code for the target cell.",
-                },
-            },
-            "required": ["path", "cell_index", "source"],
-            "additionalProperties": False,
-        },
-    ),
-)
+@runtime_checkable
+class NancyPlugin(Protocol):
+    def register_tools(self) -> list[ToolDefinition]: ...
 
-TOOL_SPECS: list[dict[str, Any]] = [tool.to_openai_spec() for tool in TOOL_DEFINITIONS]
-TOOL_DEFINITION_MAP: dict[str, ToolDefinition] = {tool.name: tool for tool in TOOL_DEFINITIONS}
+
+class ToolRegistry:
+    def __init__(self):
+        self._tools: dict[str, ToolDefinition] = {}
+        self._load_core_tools()
+
+    def _load_core_tools(self):
+        core = [
+            ToolDefinition(
+                name="bash",
+                description="Run a shell command with zsh -lc inside the local sandbox root.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "command": {
+                            "type": "string",
+                            "description": "Shell command to execute locally.",
+                        },
+                    },
+                    "required": ["command"],
+                    "additionalProperties": False,
+                },
+            ),
+            ToolDefinition(
+                name="notebook_read",
+                description="Read notebook cells and return a plain text summary.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Workspace-relative path to the notebook.",
+                        },
+                        "max_cells": {
+                            "type": "integer",
+                            "description": "Maximum number of cells to summarize.",
+                            "default": 20,
+                        },
+                    },
+                    "required": ["path"],
+                    "additionalProperties": False,
+                },
+            ),
+            ToolDefinition(
+                name="notebook_set_cell",
+                description="Replace the source of a code cell in a notebook by index.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Workspace-relative path to the notebook.",
+                        },
+                        "cell_index": {
+                            "type": "integer",
+                            "description": "Zero-based index of the code cell to replace.",
+                        },
+                        "source": {
+                            "type": "string",
+                            "description": "Full replacement source code for the target cell.",
+                        },
+                    },
+                    "required": ["path", "cell_index", "source"],
+                    "additionalProperties": False,
+                },
+            ),
+        ]
+        for t in core:
+            self.register(t)
+
+    def register(self, tool: ToolDefinition):
+        self._tools[tool.name] = tool
+
+    def load_plugins(self, workspace_root: Path):
+        # 1. Option A: Entry Points (Installed pip packages)
+        self._load_entry_points()
+        # 2. Option B: Local Scripts (.agents/tools/*.py)
+        self._load_local_tools(workspace_root)
+
+    def _load_entry_points(self):
+        try:
+            eps = metadata.entry_points(group="nexus_nancy.plugins")
+            for ep in eps:
+                try:
+                    plugin = ep.load()
+                    if hasattr(plugin, "register_tools"):
+                        for tool in plugin.register_tools():
+                            self.register(tool)
+                except Exception as exc:
+                    print(f"warning: failed to load entry point {ep.name}: {exc}", file=sys.stderr)
+        except Exception:
+            # metadata.entry_points can fail in some environments; ignore.
+            pass
+
+    def _load_local_tools(self, workspace_root: Path):
+        tools_dir = workspace_root / ".agents" / "tools"
+        if not tools_dir.exists() or not tools_dir.is_dir():
+            return
+
+        for path in tools_dir.glob("*.py"):
+            if path.name.startswith("_"):
+                continue
+            try:
+                module_name = f"nexus_nancy.dynamic.{path.stem}"
+                spec = importlib.util.spec_from_file_location(module_name, path)
+                if spec and spec.loader:
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    if hasattr(module, "register_tools"):
+                        for tool in module.register_tools():
+                            self.register(tool)
+            except Exception as exc:
+                print(f"warning: failed to load local tool {path.name}: {exc}", file=sys.stderr)
+
+    @property
+    def specs(self) -> list[dict[str, Any]]:
+        return [t.to_openai_spec() for t in self._tools.values()]
+
+    @property
+    def definitions(self) -> list[ToolDefinition]:
+        return list(self._tools.values())
+
+    def get(self, name: str) -> ToolDefinition | None:
+        return self._tools.get(name)
+
+
+# Global registry instance
+REGISTRY = ToolRegistry()
+
+# Legacy compatibility exports (will be populated during startup)
+TOOL_SPECS: list[dict[str, Any]] = []
+TOOL_DEFINITION_MAP: dict[str, ToolDefinition] = {}
+
+
+def initialize_tools(workspace_root: Path):
+    global TOOL_SPECS, TOOL_DEFINITION_MAP
+    REGISTRY.load_plugins(workspace_root)
+    TOOL_SPECS[:] = REGISTRY.specs
+    TOOL_DEFINITION_MAP.clear()
+    TOOL_DEFINITION_MAP.update({t.name: t for t in REGISTRY.definitions})
 
 
 def _load_nb(path: Path) -> dict[str, Any]:
@@ -163,7 +256,7 @@ def render_tools_block() -> str:
         "Missing required keys, wrong types, or unknown keys are rejected locally.",
         "",
     ]
-    for tool in TOOL_DEFINITIONS:
+    for tool in REGISTRY.definitions:
         schema = tool.parameters
         props = schema.get("properties") or {}
         required = set(schema.get("required") or [])
@@ -185,7 +278,7 @@ def render_tools_block() -> str:
 
 
 def validate_tool_arguments(name: str, args: Any) -> tuple[dict[str, Any] | None, str | None]:
-    tool = TOOL_DEFINITION_MAP.get(name)
+    tool = REGISTRY.get(name)
     if tool is None:
         return None, f"unknown tool '{name}'"
     if not isinstance(args, dict):
@@ -232,6 +325,13 @@ def execute_tool(name: str, args: dict[str, Any], sandbox: SandboxPolicy) -> str
     if error:
         return f"error: {error}"
     assert normalized_args is not None
+
+    tool = REGISTRY.get(name)
+    if tool and tool.handler:
+        try:
+            return str(tool.handler(**normalized_args, sandbox=sandbox))
+        except Exception as exc:
+            return f"error: {exc}"
 
     if name == "bash":
         return run_bash(normalized_args["command"], sandbox)

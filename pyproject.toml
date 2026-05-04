@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nexus-nancy"
-version = "0.1.0"
+version = "1.0.0"
 description = "Seriously lightweight agent TUI for Nexus environments"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -62,7 +62,7 @@ target-version = "py310"
 select = ["E", "F", "I", "W", "UP"]
 
 [tool.bumpversion]
-current_version = "0.1.0"
+current_version = "1.0.0"
 parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
 serialize = ["{major}.{minor}.{patch}"]
 search = "{current_version}"

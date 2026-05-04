@@ -7,7 +7,7 @@
 
 Add an execution switcher that uses a native OpenAI-compatible tool/reasoning path when the configured model can be verified to support it, and falls back to the current universal dumb-model loop when those capabilities are unknown or unsupported.
 
-## 1. Model Capability Configuration
+## 1. Model Capability Configuration [DONE]
 
 Edit `src/nexus_nancy/config.py`.
 
@@ -17,7 +17,7 @@ Edit `src/nexus_nancy/config.py`.
 - Keep defaults conservative: `execution_strategy: auto`, `capability_probe: true`, and fallback to universal unless native support is verified.
 - Confirm `_parse_flat_yaml()` handles the new string and boolean fields without special cases.
 
-## 2. Capability Detection
+## 2. Capability Detection [DONE]
 
 Create `src/nexus_nancy/capabilities.py`.
 
@@ -29,7 +29,7 @@ Create `src/nexus_nancy/capabilities.py`.
 - Return unsupported/unknown on probe failure instead of crashing auto mode.
 - Make forced native mode fail loudly when native support cannot be verified.
 
-## 3. Execution Strategy Switcher
+## 3. Execution Strategy Switcher [DONE]
 
 Create `src/nexus_nancy/execution.py` or add a small strategy layer in `src/nexus_nancy/app.py`.
 
@@ -40,7 +40,7 @@ Create `src/nexus_nancy/execution.py` or add a small strategy layer in `src/nexu
 - In forced `native_openai`, error if the model config cannot verify native tool support.
 - Keep shared `PromptResult`, `ToolCallRecord`, approval, sandbox, and transcript behavior so both routes remain inspectable.
 
-## 4. Context Builders
+## 4. Context Builders [DONE]
 
 Create `src/nexus_nancy/context.py` or keep minimal helpers in `app.py`.
 
@@ -54,7 +54,7 @@ Create `src/nexus_nancy/context.py` or keep minimal helpers in `app.py`.
 - Consider adding a bundled native prompt template at `.agents/native_instructions.txt`.
 - If adding the native template, update `bootstrap_local_files()` and `pyproject.toml` wheel/sdist inclusion.
 
-## 5. Native OpenAI Tool Route
+## 5. Native OpenAI Tool Route [DONE]
 
 Edit `src/nexus_nancy/app.py`.
 
@@ -66,7 +66,7 @@ Edit `src/nexus_nancy/app.py`.
 - Do not parse native-route visible assistant text with the universal `[RESPONSE]` parser unless explicitly preserving a compatibility shim for a known reason.
 - Preserve raw assistant logging, tool records, transcript events, and approval handling.
 
-## 6. Universal Harness Route
+## 6. Universal Harness Route [DONE]
 
 Edit `src/nexus_nancy/app.py`.
 
@@ -74,7 +74,7 @@ Edit `src/nexus_nancy/app.py`.
 - Ensure universal route still expects `[RESPONSE]...[/RESPONSE]`, treats non-response text as private/debug content, respects `[EOT]`, and can execute provider-emitted OpenAI-style tool calls.
 - Rename constants/comments where useful so it is clear they belong to the universal route rather than every route.
 
-## 7. LLM Client Support
+## 7. LLM Client Support [DONE]
 
 Edit `src/nexus_nancy/llm.py`.
 
@@ -85,7 +85,7 @@ Edit `src/nexus_nancy/llm.py`.
 - Avoid hard-coding `bash` as required in `_validate_tools()` for capability probes if probes use a synthetic tool.
 - Preserve strict preflight validation for real requests.
 
-## 8. Doctor Diagnostics
+## 8. Doctor Diagnostics [DONE]
 
 Edit `src/nexus_nancy/doctor.py`.
 

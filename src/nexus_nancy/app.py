@@ -23,7 +23,7 @@ from .execution import STRATEGY_NATIVE_OPENAI, STRATEGY_UNIVERSAL, select_execut
 from .llm import LLMClient
 from .sandbox import SandboxPolicy
 from .session import SessionState
-from .tools import TOOL_SPECS, execute_tool, validate_tool_arguments
+from .tools import TOOL_SPECS, execute_tool, initialize_tools, validate_tool_arguments
 
 EOT_TOKEN = "[EOT]"
 MAX_NO_TOOL_ASSISTANT_MESSAGES_WITHOUT_EOT = 2
@@ -87,9 +87,15 @@ class PromptResult:
         self.response_blocks.append(text)
         self.transcript_events.append(TranscriptEvent(kind="response", title="NANCY", text=text))
 
-    def add_private(self, text: str, index: int) -> None:
+    def add_private(self, text: str, index: int, note: str = "") -> None:
         self.private_blocks.append(text)
-        self.transcript_events.append(TranscriptEvent(kind="raw", title=f"RAW {index}", text=text))
+        self.transcript_events.append(
+            TranscriptEvent(kind="raw", title=f"RAW {index}", text=text)
+        )
+        # Store the note in the event text or metadata if we had it,
+        # but for now we'll just prefix the text with the note.
+        if note:
+            self.transcript_events[-1].text = f"note: {note}\n\n{text}"
 
     def add_tool(self, record: ToolCallRecord) -> None:
         self.tool_calls.append(record)
@@ -388,7 +394,16 @@ def _assistant_turn_universal(
             private_text = ""
         if private_text:
             private_index += 1
-            result.add_private(private_text, private_index)
+            result.add_private(
+                private_text,
+                private_index,
+                note=(
+                    "The model produced text outside of the formal [RESPONSE] protocol blocks. "
+                    "This content is displayed here to preserve the model's internal "
+                    "chain-of-thought and any unstructured output that was not intended "
+                    "as part of the final user-facing response."
+                ),
+            )
 
         if (
             state.cfg.model == "mock-shakespeare"
@@ -448,6 +463,24 @@ def _assistant_turn_native_openai(
         content = message.get("content") or ""
         tool_calls = message.get("tool_calls") or []
 
+        # Logic for transparency: Put everything except the visible content
+        # into the diagnostic 'raw' block. This includes reasoning_content,
+        # tool_calls, and any provider-specific fields.
+        raw_payload = {k: v for k, v in message.items() if k != "content"}
+        if len(raw_payload) > 1:  # More than just "role": "assistant"
+            private_index += 1
+            raw_text = json.dumps(raw_payload, indent=2, ensure_ascii=False)
+            result.add_private(
+                raw_text,
+                private_index,
+                note=(
+                    "This block contains the model's native reasoning and structural metadata "
+                    "as delivered by the provider. It represents the internal logic, thinking "
+                    "process, and tool-calling parameters used to formulate the final answer."
+                ),
+            )
+            state.log.write("assistant_raw_metadata", raw_text)
+
         raw_call = None if tool_calls else _raw_function_call_from_text(content)
         if raw_call is not None:
             tool_calls = [raw_call]
@@ -465,6 +498,8 @@ def _assistant_turn_native_openai(
         if tool_calls:
             if content:
                 private_index += 1
+                # Show the raw content (including any <|think|> tags) in the
+                # diagnostic transcript view.
                 result.add_private(content, private_index)
             for call in tool_calls:
                 record, tool_message, injected_user = _handle_tool_call(
@@ -479,6 +514,7 @@ def _assistant_turn_native_openai(
             continue
 
         if content.strip():
+            # For the final turn with no tools, the content is the visible response.
             result.add_response(content.strip())
         return result
 
@@ -641,6 +677,7 @@ def run_prompt(
 
 def build_state(cfg: Config, yolo: bool) -> tuple[SessionState, LLMClient, SandboxPolicy]:
     workspace_root = Path.cwd().resolve()
+    initialize_tools(workspace_root)
     logs_dir = workspace_root / "logs"
     capabilities = detect_capabilities(cfg, workspace_root)
     selection = select_execution_strategy(cfg, capabilities)

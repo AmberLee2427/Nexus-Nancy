@@ -64,6 +64,12 @@ For API key management during chat sessions:
 - `/config` opens `.agents/nnancy.yaml`
 - `/key` replaces the API key value (does not print current key)
 
+## Guides
+
+- [Models & Authentication](docs/MODELS_AND_AUTH.md) - Using Gemma 4, ChatGPT Plus ($20/mo), and standard API.
+- [Extending Nancy](docs/PLUGINS.md) - How to write and install custom tools.
+- [Capability Detection](docs/CAPABILITIES.md) - How Nancy detects tool-calling and reasoning support.
+
 ## Usage
 
 ```bash

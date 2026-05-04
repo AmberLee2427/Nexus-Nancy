@@ -247,15 +247,57 @@ class NancyTUI(App[None]):
         yield Footer()
 
     async def on_mount(self) -> None:
-        await self._append_block("system", "SYS", "Nexus-Nancy ready")
-        await self._append_block(
-            "system",
-            "SYS",
-            "Logs and transcripts are plain local files in this workspace. "
-            "Anyone with access here can read them.",
-        )
         self._refresh_status()
         self.query_one("#prompt", Input).focus()
+        await self._run_startup_diagnostics()
+
+    async def _run_startup_diagnostics(self) -> None:
+        from .doctor import run_doctor
+
+        # Run doctor logic for an authoritative system snapshot.
+        report = await asyncio.to_thread(run_doctor, self.state.cfg, self.state.workspace_root)
+
+        loop_name = (
+            "Native OpenAI-Tool Loop"
+            if self.state.execution_strategy == "native_openai"
+            else "Universal Harness Loop"
+        )
+
+        # 1. Permanent Header
+        header = (
+            f"Nancy System Ready\n"
+            f"Mode: {loop_name}"
+        )
+        await self._append_block("system", "SYS", header)
+
+        # 2. Collapsible Health Snapshot
+        snapshot_lines = []
+        for line in report.lines:
+            if ":" not in line or "Nexus-Nancy doctor" in line or "overall:" in line:
+                continue
+
+            # Make the doctor lines look "Nancy-grade" human-readable.
+            clean = line.replace("[OK]", "✅").replace("[FAIL]", "❌")
+            clean = clean.replace("api_key:", "API Key").replace("base_url_health:", "LLM Health")
+            clean = clean.replace("execution_route:", "Route Check").replace(
+                "sandbox_root:", "Sandbox"
+            )
+            clean = clean.replace("config_file:", "Config").replace("workspace:", "Root")
+            snapshot_lines.append(clean.strip())
+
+        await self._append_debug_block(
+            "SYSTEM HEALTH SNAPSHOT",
+            "\n".join(snapshot_lines)
+        )
+
+        # 3. Permanent Footer
+        logs_path = self.state.workspace_root / "logs"
+        transcripts_path = self.state.workspace_root / ".agents" / "transcripts"
+        footer = (
+            f"Logs ({logs_path}/) and transcripts ({transcripts_path}/) are plain local files.\n"
+            "Anyone with access to this workspace can read them."
+        )
+        await self._append_block("system", "SYS", footer)
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         text = event.value.strip()
@@ -436,15 +478,9 @@ class NancyTUI(App[None]):
         return self.call_from_thread(self._request_tool_approval, request)
 
     def _format_private_block(self, text: str) -> str:
-        # Keep the ugly labels. This is debug output, not polished UI copy.
-        return "\n".join(
-            [
-                "kind: assistant_raw",
-                "note: assistant emitted text outside [RESPONSE]...[/RESPONSE]",
-                "",
-                text,
-            ]
-        ).strip()
+        # Diagnostic view: show raw protocol spill or internal reasoning.
+        # This text is verbatim from the provider/harness and is not polished.
+        return f"kind: assistant_raw_diagnostic\n\n{text}".strip()
 
     def _format_tool_record(self, record) -> str:
         # Tool records stay fielded and explicit on purpose. This should read

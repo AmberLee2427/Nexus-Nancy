@@ -1,6 +1,6 @@
 project = "Nexus-Nancy"
 author = "Nexus-Nancy Maintainers"
-release = "0.1.0"
+release = "1.0.0"
 
 extensions = []
 

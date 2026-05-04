@@ -17,6 +17,7 @@ from .config import (
     open_in_editor,
 )
 from .doctor import run_doctor
+from .tools import initialize_tools
 
 try:
     from .tui import NancyTUI
@@ -35,6 +36,7 @@ Usage:
     nnancy doctor
     nnancy instructions
     nnancy config
+    nnancy auth login
 
 Commands:
     /new                Start a fresh session in this process
@@ -140,7 +142,10 @@ def _parse_args(
     i = 0
     while i < len(args):
         arg = args[i]
-        if arg in {"instructions", "config", "doctor"}:
+        if arg == "auth" and i + 1 < len(args) and args[i + 1] == "login":
+            command = "auth login"
+            i += 2
+        elif arg in {"instructions", "config", "doctor"}:
             command = arg
             i += 1
         elif arg in {"-h", "--help"}:
@@ -186,6 +191,7 @@ def main() -> None:
     yolo, single_prompt, show_help, command, mock_port, mock_prompt = _parse_args(sys.argv[1:])
     workspace_root = Path.cwd().resolve()
     bootstrap_local_files(workspace_root)
+    initialize_tools(workspace_root)
 
     if show_help:
         print(HELP)
@@ -203,6 +209,13 @@ def main() -> None:
 
     if command == "config":
         open_config_in_editor(workspace_root)
+        return
+
+    if command == "auth login":
+        from .auth import login_codex
+        from .config import codex_session_path
+        cfg = load_config(workspace_root)
+        login_codex(codex_session_path(cfg, workspace_root))
         return
 
     if command == "mock-server":

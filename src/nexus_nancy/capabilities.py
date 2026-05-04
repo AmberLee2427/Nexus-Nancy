@@ -18,7 +18,7 @@ class ModelCapabilities:
 
 
 class CapabilityProbeClient(Protocol):
-    def probe_native_tools(self) -> bool: ...
+    def probe_capabilities(self) -> dict[str, bool]: ...
 
 
 def _explicit_bool(value: object) -> bool | None:
@@ -67,14 +67,22 @@ def detect_capabilities(
                 from .llm import LLMClient
 
                 client = LLMClient(cfg, workspace_root)
-            if client.probe_native_tools():
+
+            p_caps = client.probe_capabilities()
+            if p_caps.get("native_tools"):
+                # If the user explicitly set a feature, use it; otherwise trust the probe.
+                has_reasoning = _optional_feature(
+                    cfg.reasoning_channel, default=p_caps.get("reasoning_channel", False)
+                )
                 return ModelCapabilities(
                     native_tools=True,
-                    reasoning_channel=_optional_feature(cfg.reasoning_channel),
+                    reasoning_channel=has_reasoning,
                     parallel_tool_calls=_optional_feature(cfg.parallel_tool_calls, default=True),
                     source="live probe",
                     verified=True,
-                    detail="provider returned a native tool call during probe",
+                    detail=(
+                        f"provider verified: native_tools=True, reasoning_channel={has_reasoning}"
+                    ),
                 )
             return ModelCapabilities(
                 source="live probe",

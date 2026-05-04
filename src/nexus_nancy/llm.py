@@ -1,19 +1,34 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 import httpx
 
-from .config import Config, resolve_api_key
+from .config import Config, codex_session_path, resolve_api_key
 from .token_count import estimate_context_tokens
 
 
 class LLMClient:
-    def __init__(self, cfg: Config, workspace_root):
+    def __init__(self, cfg: Config, workspace_root: Path):
         self.cfg = cfg
-        self.api_key, self.api_key_source = resolve_api_key(cfg, workspace_root)
+        self.workspace_root = workspace_root
+
+        if cfg.auth_type == "codex":
+            from .auth import get_codex_token
+            session_file = codex_session_path(cfg, workspace_root)
+            token = get_codex_token(session_file)
+            if token:
+                self.api_key = token
+                self.api_key_source = f"codex:{session_file}"
+            else:
+                self.api_key, self.api_key_source = resolve_api_key(cfg, workspace_root)
+        else:
+            self.api_key, self.api_key_source = resolve_api_key(cfg, workspace_root)
+
+        self.base_url = cfg.base_url.rstrip("/")
         self._validate_client_config()
 
     def _validate_client_config(self) -> None:
@@ -30,7 +45,10 @@ class LLMClient:
                 "https://api.openai.com/v1"
             )
 
-        if len(self.api_key.strip()) < 12:
+        if (
+            len(self.api_key.strip()) < 12
+            and self.api_key.lower() not in {"local", "none", "false"}
+        ):
             raise RuntimeError("API key looks too short. Refusing request.")
 
     def _validate_tools(self, tools: list[dict[str, Any]], *, require_bash: bool = True) -> None:
@@ -143,7 +161,7 @@ class LLMClient:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-        request_url = f"{self.cfg.base_url.rstrip('/')}/chat/completions"
+        request_url = f"{self.base_url}/chat/completions"
         with httpx.Client(timeout=self.cfg.timeout_seconds) as client:
             try:
                 resp = client.post(
@@ -185,7 +203,7 @@ class LLMClient:
                 )
                 raise RuntimeError(f"LLM request failed: {detail}") from exc
 
-    def probe_native_tools(self) -> bool:
+    def probe_capabilities(self) -> dict[str, bool]:
         probe_tool = {
             "type": "function",
             "function": {
@@ -204,16 +222,24 @@ class LLMClient:
                 "role": "system",
                 "content": "You are a capability probe. Use the provided tool if available.",
             },
-            {"role": "user", "content": "Call capability_probe with ok=true."},
+            {"role": "user", "content": "Call capability_probe with ok=true and think about it."},
         ]
-        result = self.chat(
-            messages,
-            [probe_tool],
-            tool_choice={"type": "function", "function": {"name": "capability_probe"}},
-            require_bash_tool=False,
-        )
-        message = result["choices"][0]["message"]
-        tool_calls = message.get("tool_calls") or []
-        return any(
-            call.get("function", {}).get("name") == "capability_probe" for call in tool_calls
-        )
+        try:
+            result = self.chat(
+                messages,
+                [probe_tool],
+                tool_choice={"type": "function", "function": {"name": "capability_probe"}},
+                require_bash_tool=False,
+            )
+            message = result["choices"][0]["message"]
+            tool_calls = message.get("tool_calls") or []
+
+            has_tools = any(
+                call.get("function", {}).get("name") == "capability_probe" for call in tool_calls
+            )
+            # Detect if the server used the dedicated reasoning_content field.
+            has_reasoning = bool(message.get("reasoning_content"))
+
+            return {"native_tools": has_tools, "reasoning_channel": has_reasoning}
+        except Exception:
+            return {"native_tools": False, "reasoning_channel": False}

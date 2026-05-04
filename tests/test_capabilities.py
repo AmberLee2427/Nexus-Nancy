@@ -11,10 +11,10 @@ class ProbeClient:
     def __init__(self, result: bool | Exception) -> None:
         self.result = result
 
-    def probe_native_tools(self) -> bool:
+    def probe_capabilities(self) -> dict[str, bool]:
         if isinstance(self.result, Exception):
             raise self.result
-        return self.result
+        return {"native_tools": self.result, "reasoning_channel": self.result}
 
 
 def test_explicit_config_override_verifies_native_support() -> None:
