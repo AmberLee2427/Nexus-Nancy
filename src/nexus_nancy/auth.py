@@ -35,7 +35,7 @@ def login_codex(session_path: Path):
     redirect_uri = f"http://localhost:{port}/callback"
 
     state = secrets.token_urlsafe(16)
-    auth_url = "https://auth0.openai.com/authorize?" + urlencode({
+    auth_url = "https://auth.openai.com/authorize?" + urlencode({
         "client_id": client_id,
         "audience": "https://api.openai.com/v1",
         "response_type": "code",
@@ -63,7 +63,7 @@ def login_codex(session_path: Path):
 
     print("Exchanging code for tokens...")
 
-    resp = requests.post("https://auth0.openai.com/oauth/token", json={
+    resp = requests.post("https://auth.openai.com/oauth/token", json={
         "client_id": client_id,
         "code": server.auth_code,
         "grant_type": "authorization_code",

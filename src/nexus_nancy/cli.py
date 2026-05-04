@@ -28,20 +28,29 @@ except Exception:  # pragma: no cover
 HELP = """Nexus-Nancy
 
 Usage:
-    nnancy
-    nnancy -t \"your prompt\"
-    nnancy -m
-    nnancy -tm \"your prompt\"
-    nnancy --mock-server
-    nnancy doctor
-    nnancy instructions
-    nnancy config
-    nnancy auth login
+    nnancy [options]
+
+Options:
+    -t, --transcript       Include the full reasoning transcript in the output.
+    -m, --mock             Use the local mock server instead of a real provider.
+    -tm, -mt               Combine transcript and mock server flags.
+    <prompt>               The prompt text (e.g. `nnancy -t "Say hello"`).
+                           If omitted, drops into the interactive TUI.
 
 Commands:
-    /new                Start a fresh session in this process
-    /handoff            Save handoff JSON snapshot
-    /handoff PATH       Load prior handoff JSON
+    nnancy doctor          Run a diagnostic health check on the LLM and API key.
+    nnancy instructions    Open the system prompt instructions file in your editor.
+    nnancy config          Open the nnancy.yaml configuration file in your editor.
+    nnancy auth login      Log in to ChatGPT Plus via OAuth (Codex mode).
+
+Interactive Chat Commands (in TUI):
+    /new                   Start a fresh session in this process
+    /handoff               Save handoff JSON snapshot
+    /handoff PATH          Load prior handoff JSON
+    /copy                  Open copy mode to select and yank transcript text
+    /config                Open nnancy.yaml in your editor and append changes to session
+    /key                   Set or replace your API key securely
+    /quit, /exit           Exit the TUI session
 
 Attachments:
     Use @relative/path to inline file content into your prompt

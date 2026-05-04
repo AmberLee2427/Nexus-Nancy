@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.2] - 2026-05-04
+
+### Changed
+- Expanded CLI help text to comprehensively list all available interactive chat commands (`/copy`, `/config`, `/key`, `/quit`, etc.).
+
+### Fixed
+- Fixed a 404 error during `nnancy auth login` caused by an incorrect OpenAI Auth0 domain (`auth0.openai.com` -> `auth.openai.com`).
+
+
 ## [1.0.1] - 2026-05-04
 
 ### Fixed

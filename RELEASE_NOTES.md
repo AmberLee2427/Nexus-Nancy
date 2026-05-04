@@ -1,12 +1,15 @@
-# Gulls v1.0.1 Release Notes
+# Gulls v1.0.2 Release Notes
 
 **Release Date:** 2026-05-04
 
 ## Patch Release
 
 
+### Changed
+- Expanded CLI help text to comprehensively list all available interactive chat commands (`/copy`, `/config`, `/key`, `/quit`, etc.).
+
 ### Fixed
-- Fixed a bug where the `bash` tool would crash with a `FileNotFoundError` on CI environments (like Ubuntu GitHub Actions runners) that don't have `zsh` installed by default. It now falls back gracefully to `bash`.
+- Fixed a 404 error during `nnancy auth login` caused by an incorrect OpenAI Auth0 domain (`auth0.openai.com` -> `auth.openai.com`).
 ## What's New
 
 This release includes the following changes:
@@ -30,4 +33,4 @@ See [CHANGELOG.md](CHANGELOG.md) for the complete list of changes.
 
 ---
 
-**Previous Release:** v1.0.0
+**Previous Release:** v1.0.1
