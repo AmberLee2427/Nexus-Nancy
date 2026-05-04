@@ -95,7 +95,7 @@ Edit `src/nexus_nancy/doctor.py`.
 - Add a doctor check that explains when the app will use universal fallback.
 - Ensure doctor remains useful even if capability probing fails.
 
-## 9. CLI and TUI Visibility
+## 9. CLI and TUI Visibility [DONE]
 
 Edit `src/nexus_nancy/cli.py` and `src/nexus_nancy/tui.py`.
 
@@ -103,7 +103,7 @@ Edit `src/nexus_nancy/cli.py` and `src/nexus_nancy/tui.py`.
 - Keep normal single-prompt CLI output clean; expose route details through doctor and errors rather than every response.
 - In TUI transcript/debug panels, show native tool calls and universal parsed tool calls consistently.
 
-## 10. Mock Provider Updates
+## 10. Mock Provider Updates [DONE]
 
 Edit `tests/mock_llm_service.py`.
 
