@@ -1,6 +1,8 @@
 import http.server
 import json
+import os
 import secrets
+import sys
 import webbrowser
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
@@ -29,7 +31,9 @@ class OAuthCallbackHandler(http.server.BaseHTTPRequestHandler):
 
 
 def login_codex(session_path: Path):
-    client_id = "pdlLmc9vS9j78K6m0iS16iP3979T6Y"
+    import threading
+
+    client_id = "app_EMoamEEZ73f0CkXaXp7hrann"
     # Port 18081 is a common local callback port for this flow.
     port = 18081
     redirect_uri = f"http://localhost:{port}/callback"
@@ -44,24 +48,69 @@ def login_codex(session_path: Path):
         "state": state,
     })
 
-    print("\n--- OpenAI Codex Login ---")
-    print("Opening browser to authorize Nexus-Nancy...")
-    print(f"URL: {auth_url}\n")
+    print("\n" + "="*60)
+    print(" OPENAI CODEX LOGIN (CHATGPT PLUS)".center(60))
+    print("="*60)
+    print("\nThis command will authenticate Nexus-Nancy using your ChatGPT Plus")
+    print("subscription. Follow these steps to authorize this machine:\n")
+    print(f"1. OPEN this URL in your local web browser:\n\n   {auth_url}\n")
+    print("2. LOG IN to your OpenAI account.")
+    print("3. AUTHORIZE the application if prompted.")
+    print("4. FINISH: Your browser will redirect to a 'localhost' URL.")
+    print("   Note: This page will likely show a 'Connection Refused' error.")
+    print("   THIS IS NORMAL.\n")
+    print("5. COPY the entire URL from your browser's address bar.")
+    print("6. PASTE that URL below to complete the setup.\n")
+    print("-" * 60)
 
-    # Try to open browser automatically
-    webbrowser.open(auth_url)
+    # Try to open browser automatically (works on local desktops)
+    try:
+        # Suppress stderr to avoid "no browser found" noise on clusters
+        with open(os.devnull, "w") as f:
+            old_stderr = os.dup(sys.stderr.fileno())
+            os.dup2(f.fileno(), sys.stderr.fileno())
+            webbrowser.open(auth_url)
+            os.dup2(old_stderr, sys.stderr.fileno())
+    except Exception:
+        pass
 
     server = http.server.HTTPServer(("127.0.0.1", port), OAuthCallbackHandler)
     server.auth_code = None
     server.auth_state = None
 
-    # Wait for one request
-    server.handle_request()
+    def _serve():
+        try:
+            server.handle_request()
+        except Exception:
+            pass
+
+    t = threading.Thread(target=_serve, daemon=True)
+    t.start()
+
+    print("(Listening on localhost:18081 for automatic local redirect...)")
+
+    try:
+        manual_url = input("\nPASTE REDIRECT URL HERE: ").strip()
+    except EOFError:
+        manual_url = ""
+
+    if manual_url:
+        try:
+            query = parse_qs(urlparse(manual_url).query)
+            server.auth_code = query.get("code", [None])[0]
+            server.auth_state = query.get("state", [None])[0]
+            # Send a dummy request to cleanly unblock the server thread
+            requests.get(redirect_uri, timeout=1)
+        except Exception as e:
+            print(f"Error parsing URL: {e}")
+
+    t.join(timeout=2)
 
     if not server.auth_code or server.auth_state != state:
+        print("\n[FAIL] Login timed out or invalid URL provided.")
         raise RuntimeError("Login failed: Invalid state or no code received.")
 
-    print("Exchanging code for tokens...")
+    print("\n[OK] Identity verified. Exchanging code for tokens...")
 
     resp = requests.post("https://auth.openai.com/oauth/token", json={
         "client_id": client_id,

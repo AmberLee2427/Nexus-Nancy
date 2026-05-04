@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.0.4] - 2026-05-04
+
+### Added
+- [Add new features here]
+
+### Changed
+- [Add changes here]
+
+### Fixed
+- [Add bug fixes here]
+
+### Security
+- [Add security fixes here]
+
+
+## [1.0.3] - 2026-05-04
+
+### Changed
+- Removed test-only `mock` server flags (`-m`, `-tm`) from the public CLI help text. These flags were only meant for internal repository testing and shouldn't clutter the user-facing documentation.
+
+
 ## [1.0.2] - 2026-05-04
 
 ### Changed

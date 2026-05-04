@@ -32,8 +32,6 @@ Usage:
 
 Options:
     -t, --transcript       Include the full reasoning transcript in the output.
-    -m, --mock             Use the local mock server instead of a real provider.
-    -tm, -mt               Combine transcript and mock server flags.
     <prompt>               The prompt text (e.g. `nnancy -t "Say hello"`).
                            If omitted, drops into the interactive TUI.
 

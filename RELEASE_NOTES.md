@@ -1,15 +1,21 @@
-# Gulls v1.0.2 Release Notes
+# Gulls v1.0.4 Release Notes
 
 **Release Date:** 2026-05-04
 
 ## Patch Release
 
 
+### Added
+- [Add new features here]
+
 ### Changed
-- Expanded CLI help text to comprehensively list all available interactive chat commands (`/copy`, `/config`, `/key`, `/quit`, etc.).
+- [Add changes here]
 
 ### Fixed
-- Fixed a 404 error during `nnancy auth login` caused by an incorrect OpenAI Auth0 domain (`auth0.openai.com` -> `auth.openai.com`).
+- [Add bug fixes here]
+
+### Security
+- [Add security fixes here]
 ## What's New
 
 This release includes the following changes:
@@ -33,4 +39,4 @@ See [CHANGELOG.md](CHANGELOG.md) for the complete list of changes.
 
 ---
 
-**Previous Release:** v1.0.1
+**Previous Release:** v1.0.3
