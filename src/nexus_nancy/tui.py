@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import getpass
-from pathlib import Path
 import shutil
 import subprocess
+from pathlib import Path
 from uuid import uuid4
 
 from rich.text import Text
@@ -240,7 +240,10 @@ class NancyTUI(App[None]):
         with Vertical():
             yield VerticalScroll(id="transcript")
             yield Static("", id="status")
-            yield Input(placeholder="Type prompt, /new, /handoff, /copy, /config, /key, /exit", id="prompt")
+            yield Input(
+                placeholder="Type prompt, /new, /handoff, /copy, /config, /key, /exit",
+                id="prompt",
+            )
         yield Footer()
 
     async def on_mount(self) -> None:
@@ -248,7 +251,8 @@ class NancyTUI(App[None]):
         await self._append_block(
             "system",
             "SYS",
-            "Logs and transcripts are plain local files in this workspace. Anyone with access here can read them.",
+            "Logs and transcripts are plain local files in this workspace. "
+            "Anyone with access here can read them.",
         )
         self._refresh_status()
         self.query_one("#prompt", Input).focus()
@@ -267,7 +271,11 @@ class NancyTUI(App[None]):
             return
         if text == "/config":
             await self.action_open_config_file()
-            await self._append_block("system", "SYS", f"opened config file: {config_path(self.state.workspace_root)}")
+            await self._append_block(
+                "system",
+                "SYS",
+                f"opened config file: {config_path(self.state.workspace_root)}",
+            )
             self._refresh_status()
             return
         if text == "/key":
@@ -308,7 +316,8 @@ class NancyTUI(App[None]):
         await self._append_block(
             "system",
             "SYS",
-            "Logs and transcripts are plain local files in this workspace. Anyone with access here can read them.",
+            "Logs and transcripts are plain local files in this workspace. "
+            "Anyone with access here can read them.",
         )
 
     async def action_copy_mode(self) -> None:
@@ -365,7 +374,9 @@ class NancyTUI(App[None]):
             for event in result.transcript_events:
                 if event.kind == "raw":
                     self._raw_count += 1
-                    await self._append_raw_block(self._raw_count, self._format_private_block(event.text))
+                    await self._append_raw_block(
+                        self._raw_count, self._format_private_block(event.text)
+                    )
                     continue
                 if event.kind == "debug":
                     await self._append_debug_block(event.title, event.text)
@@ -383,7 +394,9 @@ class NancyTUI(App[None]):
             self._raw_count += 1
             await self._append_raw_block(self._raw_count, self._format_private_block(block))
         for record in result.tool_calls:
-            await self._append_debug_block(f"TOOL {record.status.upper()}", self._format_tool_record(record))
+            await self._append_debug_block(
+                f"TOOL {record.status.upper()}", self._format_tool_record(record)
+            )
 
     async def _append_block(self, kind: str, title: str, text: str) -> None:
         transcript = self.query_one("#transcript", VerticalScroll)
@@ -452,8 +465,9 @@ class NancyTUI(App[None]):
         cwd = Path.cwd().name
         tokens = estimate_context_tokens(self.state.messages, self.state.cfg.model)
         debug_state = "collapsed" if self._debug_collapsed else "expanded"
+        route = getattr(self.state, "execution_strategy", "universal")
         status.update(
-            f"model={self.state.cfg.model} | mode={mode} | cwd={cwd} | "
+            f"model={self.state.cfg.model} | route={route} | mode={mode} | cwd={cwd} | "
             f"context_tokens~{tokens} | debug={debug_state} | id={self.session_id}"
         )
 

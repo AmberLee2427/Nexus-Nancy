@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import os
 import stat
 from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
 
+from .capabilities import detect_capabilities
 from .config import (
     Config,
     config_path,
@@ -16,6 +16,7 @@ from .config import (
     resolve_api_key,
     sandbox_allowlist_path,
 )
+from .execution import select_execution_strategy
 from .llm import LLMClient
 from .tools import TOOL_SPECS
 
@@ -74,6 +75,23 @@ def run_doctor(cfg: Config, workspace_root: Path) -> DoctorReport:
     sandbox_root = (workspace_root / cfg.sandbox_root).resolve()
     checks.append(("sandbox_root", sandbox_root.exists(), str(sandbox_root)))
 
+    capabilities = detect_capabilities(cfg, workspace_root)
+    route_ok = True
+    try:
+        selection = select_execution_strategy(cfg, capabilities)
+        route_info = (
+            f"requested={selection.requested}; selected={selection.selected}; "
+            f"capability_source={capabilities.source}; verified={capabilities.verified}; "
+            f"native_tools={capabilities.native_tools}; "
+            f"reasoning_channel={capabilities.reasoning_channel}; "
+            f"parallel_tool_calls={capabilities.parallel_tool_calls}; "
+            f"detail={capabilities.detail}"
+        )
+    except Exception as exc:
+        route_ok = False
+        route_info = str(exc)
+    checks.append(("execution_route", route_ok, route_info))
+
     # URL health check: /models typically exists on OpenAI-compatible servers.
     base = cfg.base_url.rstrip("/")
     models_url = f"{base}/models"
@@ -118,6 +136,7 @@ def run_doctor(cfg: Config, workspace_root: Path) -> DoctorReport:
     lines.append("")
     lines.append(f"model: {cfg.model}")
     lines.append(f"base_url: {cfg.base_url}")
+    lines.append(f"execution_strategy: {cfg.execution_strategy}")
     lines.append("")
 
     for name, ok, info in checks:

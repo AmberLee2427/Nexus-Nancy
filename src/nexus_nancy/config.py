@@ -20,6 +20,11 @@ class Config:
     max_preflight_tokens: int = 120000
     sandbox_root: str = "."
     max_attachment_bytes: int = 120000
+    execution_strategy: str = "auto"
+    native_tools: bool | str = "auto"
+    reasoning_channel: bool | str = "auto"
+    parallel_tool_calls: bool | str = "auto"
+    capability_probe: bool = True
 
 
 def agents_dir(workspace_root: Path) -> Path:
@@ -56,6 +61,11 @@ timeout_seconds: 120
 max_preflight_tokens: 120000
 sandbox_root: .
 max_attachment_bytes: 120000
+execution_strategy: auto
+native_tools: auto
+reasoning_channel: auto
+parallel_tool_calls: auto
+capability_probe: true
 """
 
 
@@ -81,7 +91,8 @@ def bootstrap_local_files(workspace_root: Path) -> None:
     allowlist = sandbox_allowlist_path(workspace_root)
     if not allowlist.exists():
         allowlist.write_text(
-            "# One substring per line. If matched in command, sandbox substring blocks are skipped.\n",
+            "# One substring per line. If matched in command, "
+            "sandbox substring blocks are skipped.\n",
             encoding="utf-8",
         )
 
@@ -240,9 +251,13 @@ def _normalize_config_paths_on_save(path: Path, workspace_root: Path) -> None:
     sandbox_root = str(raw.get("sandbox_root", "")).strip()
 
     if api_key_file:
-        updates["api_key_file"] = str((workspace_root / _unquote(api_key_file)).expanduser().resolve())
+        updates["api_key_file"] = str(
+            (workspace_root / _unquote(api_key_file)).expanduser().resolve()
+        )
     if sandbox_root:
-        updates["sandbox_root"] = str((workspace_root / _unquote(sandbox_root)).expanduser().resolve())
+        updates["sandbox_root"] = str(
+            (workspace_root / _unquote(sandbox_root)).expanduser().resolve()
+        )
 
     if not updates:
         return

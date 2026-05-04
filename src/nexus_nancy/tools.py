@@ -176,8 +176,10 @@ def render_tools_block() -> str:
             default = spec.get("default")
             default_text = f"; default={default!r}" if default is not None else ""
             desc = spec.get("description", "").strip()
+            description = desc or "No description."
             lines.append(
-                f"    - {key} ({type_name}, {required_label}{default_text}): {desc or 'No description.'}"
+                f"    - {key} ({type_name}, {required_label}{default_text}): "
+                f"{description}"
             )
     return "\n".join(lines)
 

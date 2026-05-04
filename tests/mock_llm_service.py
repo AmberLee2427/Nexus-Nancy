@@ -8,7 +8,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from uuid import uuid4
 
-
 SHAKESPEARE_QUOTES = [
     "To be, or not to be: that is the question.",
     "The lady doth protest too much, methinks.",
@@ -23,7 +22,8 @@ SHAKESPEARE_QUOTES = [
 PRIVATE_PADDING_LINES = [
     "Private note: codex-versus-claude takes are low-value noise, but here we are anyway.",
     "Private note: mock assistant remains professionally unserious about leaderboard discourse.",
-    "Private note: this padding is intentionally pointless and should never be shown as user-facing text.",
+    "Private note: this padding is intentionally pointless and should never be shown "
+    "as user-facing text.",
 ]
 
 
@@ -183,10 +183,43 @@ def _chat_completion_response(body: dict[str, Any]) -> dict[str, Any]:
     model = body.get("model", "mock-shakespeare")
     latest = _latest_non_system_message(messages)
     commands = _extract_commands_from_messages(messages)
+    tools = body.get("tools") or []
+
+    if model == "mock-native-tools" and tools and body.get("tool_choice"):
+        choice = body.get("tool_choice") or {}
+        choice_fn = choice.get("function") if isinstance(choice, dict) else {}
+        if choice_fn.get("name") == "capability_probe":
+            message = {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": f"call_{uuid4().hex[:12]}",
+                        "type": "function",
+                        "function": {
+                            "name": "capability_probe",
+                            "arguments": json.dumps({"ok": True}),
+                        },
+                    }
+                ],
+            }
+            return _response_for_message(model, message, finish_reason="tool_calls")
+
+    if model == "mock-tools-ignored" and tools:
+        message = {"role": "assistant", "content": "I ignored the native tool payload."}
+        return _response_for_message(model, message, finish_reason="stop")
 
     if latest and latest.get("role") == "tool":
         tool_messages = _collect_trailing_tool_messages(messages)
-        tool_summary = "\n\n".join(msg.get("content", "") for msg in tool_messages if msg.get("content"))
+        tool_summary = "\n\n".join(
+            msg.get("content", "") for msg in tool_messages if msg.get("content")
+        )
+        if model == "mock-native-tools":
+            message = {
+                "role": "assistant",
+                "content": f"Tool run complete.\n{tool_summary}",
+            }
+            return _response_for_message(model, message, finish_reason="stop")
         message = {
             "role": "assistant",
             "content": (
@@ -197,6 +230,18 @@ def _chat_completion_response(body: dict[str, Any]) -> dict[str, Any]:
                 "[/RESPONSE]\n"
                 "[EOT]"
             ),
+        }
+    elif model == "mock-malformed-tools" and latest and latest.get("role") == "user":
+        message = {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": f"call_{uuid4().hex[:12]}",
+                    "type": "function",
+                    "function": {"name": "bash", "arguments": "{not json"},
+                }
+            ],
         }
     elif latest and latest.get("role") == "user" and commands:
         tool_calls = []
@@ -221,6 +266,9 @@ def _chat_completion_response(body: dict[str, Any]) -> dict[str, Any]:
             "tool_calls": tool_calls,
         }
     else:
+        if model == "mock-native-tools":
+            message = {"role": "assistant", "content": random.choice(SHAKESPEARE_QUOTES)}
+            return _response_for_message(model, message, finish_reason="stop")
         message = {
             "role": "assistant",
             "content": (
@@ -229,6 +277,16 @@ def _chat_completion_response(body: dict[str, Any]) -> dict[str, Any]:
             ),
         }
 
+    return _response_for_message(
+        model,
+        message,
+        finish_reason="tool_calls" if message.get("tool_calls") else "stop",
+    )
+
+
+def _response_for_message(
+    model: str, message: dict[str, Any], finish_reason: str
+) -> dict[str, Any]:
     return {
         "id": f"chatcmpl_{uuid4().hex}",
         "object": "chat.completion",
@@ -238,7 +296,7 @@ def _chat_completion_response(body: dict[str, Any]) -> dict[str, Any]:
             {
                 "index": 0,
                 "message": message,
-                "finish_reason": "tool_calls" if commands else "stop",
+                "finish_reason": finish_reason,
             }
         ],
     }
@@ -284,6 +342,10 @@ class MockLLMHandler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": {"message": "invalid JSON body"}})
             return
 
+        if body.get("model") == "mock-tools-rejected" and body.get("tools"):
+            self._send_json(400, {"error": {"message": "tools are not supported by this model"}})
+            return
+
         response = _chat_completion_response(body)
         self._send_json(200, response)
 
@@ -297,7 +359,15 @@ class MockLLMHandler(BaseHTTPRequestHandler):
                 {
                     "object": "list",
                     "data": [
-                        {"id": "mock-shakespeare", "object": "model", "owned_by": "nexus-nancy"}
+                        {"id": "mock-shakespeare", "object": "model", "owned_by": "nexus-nancy"},
+                        {"id": "mock-native-tools", "object": "model", "owned_by": "nexus-nancy"},
+                        {"id": "mock-tools-rejected", "object": "model", "owned_by": "nexus-nancy"},
+                        {"id": "mock-tools-ignored", "object": "model", "owned_by": "nexus-nancy"},
+                        {
+                            "id": "mock-malformed-tools",
+                            "object": "model",
+                            "owned_by": "nexus-nancy",
+                        },
                     ],
                 },
             )

@@ -2,25 +2,28 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+from uuid import uuid4
 
+from .capabilities import detect_capabilities
 from .config import (
     Config,
     handoff_instructions_path,
-    load_instructions,
     load_sandbox_allowlist,
     open_config_in_editor,
     relay_instructions_path,
     render_prompt_template,
     replace_api_key,
 )
+from .context import build_native_openai_context, build_universal_context
+from .execution import STRATEGY_NATIVE_OPENAI, STRATEGY_UNIVERSAL, select_execution_strategy
 from .llm import LLMClient
 from .sandbox import SandboxPolicy
 from .session import SessionState
-from .tools import TOOL_SPECS, execute_tool, render_tools_block, validate_tool_arguments
-
+from .tools import TOOL_SPECS, execute_tool, validate_tool_arguments
 
 EOT_TOKEN = "[EOT]"
 MAX_NO_TOOL_ASSISTANT_MESSAGES_WITHOUT_EOT = 2
@@ -280,7 +283,73 @@ def _handle_tool_call(
     )
 
 
-def _assistant_turn(
+def _json_objects_from_text(text: str) -> list[dict[str, Any]]:
+    decoder = json.JSONDecoder()
+    objects: list[dict[str, Any]] = []
+    stripped = text.strip()
+    candidates = [stripped]
+
+    fenced = re.findall(r"```(?:json)?\s*(.*?)\s*```", stripped, flags=re.DOTALL | re.IGNORECASE)
+    candidates.extend(fenced)
+
+    for candidate in candidates:
+        candidate = candidate.strip()
+        if not candidate:
+            continue
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, dict):
+            objects.append(parsed)
+
+    for idx, char in enumerate(stripped):
+        if char != "{":
+            continue
+        try:
+            parsed, _ = decoder.raw_decode(stripped[idx:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            objects.append(parsed)
+
+    return objects
+
+
+def _raw_function_call_from_text(content: str) -> dict[str, Any] | None:
+    for obj in _json_objects_from_text(content):
+        fn = obj.get("function") if isinstance(obj.get("function"), dict) else {}
+        name = obj.get("name") or obj.get("tool") or fn.get("name")
+        args = obj.get("arguments")
+        if args is None:
+            args = obj.get("args")
+        if args is None:
+            args = fn.get("arguments")
+        if not isinstance(name, str):
+            continue
+        if isinstance(args, str):
+            args_text = args
+            try:
+                decoded_args = json.loads(args_text)
+            except json.JSONDecodeError:
+                continue
+        elif isinstance(args, dict):
+            decoded_args = args
+            args_text = json.dumps(args, ensure_ascii=False)
+        else:
+            continue
+        _, validation_error = validate_tool_arguments(name, decoded_args)
+        if validation_error:
+            continue
+        return {
+            "id": f"raw_call_{uuid4().hex[:12]}",
+            "type": "function",
+            "function": {"name": name, "arguments": args_text},
+        }
+    return None
+
+
+def _assistant_turn_universal(
     state: SessionState,
     llm: LLMClient,
     sandbox: SandboxPolicy,
@@ -360,6 +429,71 @@ def _assistant_turn(
             return result
 
 
+def _assistant_turn_native_openai(
+    state: SessionState,
+    llm: LLMClient,
+    sandbox: SandboxPolicy,
+    tool_approval: ToolApprovalHandler | None = None,
+) -> PromptResult:
+    result = PromptResult()
+    private_index = 0
+
+    while True:
+        api_result = llm.chat(
+            state.messages,
+            TOOL_SPECS,
+            parallel_tool_calls=bool(getattr(state.capabilities, "parallel_tool_calls", False)),
+        )
+        message = api_result["choices"][0]["message"]
+        content = message.get("content") or ""
+        tool_calls = message.get("tool_calls") or []
+
+        raw_call = None if tool_calls else _raw_function_call_from_text(content)
+        if raw_call is not None:
+            tool_calls = [raw_call]
+
+        assistant_msg: dict[str, Any] = {"role": "assistant"}
+        if content and raw_call is None:
+            assistant_msg["content"] = content
+        elif content:
+            assistant_msg["content"] = content
+        if tool_calls:
+            assistant_msg["tool_calls"] = tool_calls
+        state.messages.append(assistant_msg)
+        state.log.write("assistant_raw", content or "<empty>")
+
+        if tool_calls:
+            if content:
+                private_index += 1
+                result.add_private(content, private_index)
+            for call in tool_calls:
+                record, tool_message, injected_user = _handle_tool_call(
+                    state, call, sandbox, tool_approval
+                )
+                result.add_tool(record)
+                state.log.write(f"tool:{record.name}", record.output)
+                state.messages.append(tool_message)
+                if injected_user:
+                    state.messages.append({"role": "user", "content": injected_user})
+                    state.log.write("user", injected_user)
+            continue
+
+        if content.strip():
+            result.add_response(content.strip())
+        return result
+
+
+def _assistant_turn_for_strategy(
+    state: SessionState,
+    llm: LLMClient,
+    sandbox: SandboxPolicy,
+    tool_approval: ToolApprovalHandler | None = None,
+) -> PromptResult:
+    if state.execution_strategy == STRATEGY_NATIVE_OPENAI:
+        return _assistant_turn_native_openai(state, llm, sandbox, tool_approval)
+    return _assistant_turn_universal(state, llm, sandbox, tool_approval)
+
+
 def run_prompt(
     state: SessionState,
     llm: LLMClient,
@@ -404,16 +538,26 @@ def run_prompt(
         ]
         tool_outputs = [m for m in chat_history if m.get("role") == "tool"]
         if not assistant_raw_blocks:
-            assistant_raw_blocks = [{"role": "assistant", "content": "No assistant raw content present."}]
+            assistant_raw_blocks = [
+                {"role": "assistant", "content": "No assistant raw content present."}
+            ]
         if not tool_outputs:
             tool_outputs = [{"role": "tool", "content": "No tool call outputs present."}]
 
         handoff_prompt = handoff_instructions_path(state.workspace_root).read_text(encoding="utf-8")
 
         todo_path = state.workspace_root / ".agents/TODO.md"
-        todo = todo_path.read_text(encoding="utf-8").strip() if todo_path.exists() else "(No todo list present)"
+        todo = (
+            todo_path.read_text(encoding="utf-8").strip()
+            if todo_path.exists()
+            else "(No todo list present)"
+        )
 
-        summary_model = getattr(state.cfg, "summary_model", getattr(state.cfg, "model", "gpt-4o-mini"))
+        summary_model = getattr(
+            state.cfg,
+            "summary_model",
+            getattr(state.cfg, "model", "gpt-4o-mini"),
+        )
         summary_cfg = Config(
             model=summary_model,
             **{key: value for key, value in state.cfg.__dict__.items() if key != "model"},
@@ -425,7 +569,8 @@ def run_prompt(
                 "role": "user",
                 "content": (
                     f"Here is the conversation history:\n\n{json.dumps(chat_history, indent=2)}"
-                    f"\n\nHere is the raw assistant content:\n\n{json.dumps(assistant_raw_blocks, indent=2)}"
+                    "\n\nHere is the raw assistant content:\n\n"
+                    f"{json.dumps(assistant_raw_blocks, indent=2)}"
                     f"\n\nHere are the tool call outputs:\n\n{json.dumps(tool_outputs, indent=2)}"
                     f"\n\nThe current todo list is:\n{todo}"
                 ),
@@ -433,10 +578,10 @@ def run_prompt(
         ]
         try:
             summary_result = summary_llm.chat(summary_messages, tools=[])
-            summary_content = summary_result["choices"][0]["message"].get("content", "(No summary returned)")
+            summary_content = summary_result["choices"][0]["message"].get(
+                "content", "(No summary returned)"
+            )
         except Exception as exc:
-            # Handoff failures should retain the exact provider/client message so
-            # users can see whether the summarizer failed locally or remotely.
             summary_content = f"(Summary failed: {exc})"
 
         summary_match = re.search(r"\[SUMMARY\](.*?)\[/SUMMARY\]", summary_content, re.DOTALL)
@@ -462,7 +607,11 @@ def run_prompt(
         )
         logs_dir = state.workspace_root / "logs"
         new_state = SessionState.create(state.cfg, relay_prompt, state.workspace_root, logs_dir)
-        new_state.messages.append({"role": "user", "content": f"[SUMMARY]\n{summary_text}\n[/SUMMARY]"})
+        new_state.execution_strategy = state.execution_strategy
+        new_state.capabilities = state.capabilities
+        new_state.messages.append(
+            {"role": "user", "content": f"[SUMMARY]\n{summary_text}\n[/SUMMARY]"}
+        )
         new_state.messages.append({"role": "user", "content": f"[TODO]\n{todo_text}\n[/TODO]"})
         state.cfg = new_state.cfg
         state.system_prompt = new_state.system_prompt
@@ -474,14 +623,13 @@ def run_prompt(
                 "Handoff complete. Summary and todo saved. New session started with relay prompt."
             ]
         )
-
     enriched = _attach_files(user_text, state.workspace_root, state.cfg.max_attachment_bytes)
     state.messages.append({"role": "user", "content": enriched})
     # Log the expanded user message, not a cleaned version, so attachments and
     # inline prompt context can be audited after the fact.
     state.log.write("user", enriched)
 
-    answer = _assistant_turn(state, llm, sandbox, tool_approval=tool_approval)
+    answer = _assistant_turn_for_strategy(state, llm, sandbox, tool_approval=tool_approval)
     if answer.response_text:
         # Visible assistant text gets its own log channel, but the raw assistant
         # content above remains authoritative for debugging.
@@ -494,16 +642,15 @@ def run_prompt(
 def build_state(cfg: Config, yolo: bool) -> tuple[SessionState, LLMClient, SandboxPolicy]:
     workspace_root = Path.cwd().resolve()
     logs_dir = workspace_root / "logs"
-    instructions_template = load_instructions(workspace_root)
-    instructions = render_prompt_template(
-        instructions_template,
-        {
-            "user_display_name": cfg.user_display_name,
-            "sandbox_root": cfg.sandbox_root,
-            "tools": render_tools_block(),
-        },
-    )
+    capabilities = detect_capabilities(cfg, workspace_root)
+    selection = select_execution_strategy(cfg, capabilities)
+    if selection.selected == STRATEGY_UNIVERSAL:
+        instructions = build_universal_context(cfg, workspace_root)
+    else:
+        instructions = build_native_openai_context(cfg)
     state = SessionState.create(cfg, instructions, workspace_root, logs_dir)
+    state.execution_strategy = selection.selected
+    state.capabilities = selection.capabilities
     llm = LLMClient(cfg, workspace_root)
     allowlist = load_sandbox_allowlist(workspace_root)
     sandbox_root = Path(cfg.sandbox_root).expanduser()

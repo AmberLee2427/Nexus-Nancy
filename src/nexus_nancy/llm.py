@@ -33,7 +33,7 @@ class LLMClient:
         if len(self.api_key.strip()) < 12:
             raise RuntimeError("API key looks too short. Refusing request.")
 
-    def _validate_tools(self, tools: list[dict[str, Any]]) -> None:
+    def _validate_tools(self, tools: list[dict[str, Any]], *, require_bash: bool = True) -> None:
         if not tools:
             return
 
@@ -49,7 +49,7 @@ class LLMClient:
 
         if len(set(names)) != len(names):
             raise RuntimeError("Duplicate tool names detected. Refusing request.")
-        if "bash" not in names:
+        if require_bash and "bash" not in names:
             raise RuntimeError("Primary 'bash' tool missing from payload. Refusing request.")
 
     def _validate_messages(self, messages: list[dict[str, Any]]) -> None:
@@ -84,12 +84,19 @@ class LLMClient:
         if est_tokens > self.cfg.max_preflight_tokens:
             raise RuntimeError(
                 "Request too large before send: "
-                f"estimated {est_tokens} tokens > max_preflight_tokens {self.cfg.max_preflight_tokens}"
+                f"estimated {est_tokens} tokens > max_preflight_tokens "
+                f"{self.cfg.max_preflight_tokens}"
             )
 
-    def _validate_request(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> None:
+    def _validate_request(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        *,
+        require_bash_tool: bool = True,
+    ) -> None:
         self._validate_client_config()
-        self._validate_tools(tools)
+        self._validate_tools(tools, require_bash=require_bash_tool)
         self._validate_messages(messages)
 
     def _api_key_preview(self) -> str:
@@ -109,9 +116,15 @@ class LLMClient:
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
+        *,
+        tool_choice: str | dict[str, Any] | None = None,
+        parallel_tool_calls: bool | None = None,
+        response_format: dict[str, Any] | None = None,
+        extra_body: dict[str, Any] | None = None,
+        require_bash_tool: bool = True,
     ) -> dict[str, Any]:
         tool_specs = tools or []
-        self._validate_request(messages, tool_specs)
+        self._validate_request(messages, tool_specs, require_bash_tool=require_bash_tool)
         payload: dict[str, Any] = {
             "model": self.cfg.model,
             "messages": messages,
@@ -119,7 +132,13 @@ class LLMClient:
         }
         if tool_specs:
             payload["tools"] = tool_specs
-            payload["tool_choice"] = "auto"
+            payload["tool_choice"] = "auto" if tool_choice is None else tool_choice
+        if parallel_tool_calls is not None:
+            payload["parallel_tool_calls"] = parallel_tool_calls
+        if response_format is not None:
+            payload["response_format"] = response_format
+        if extra_body:
+            payload.update(extra_body)
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -165,3 +184,36 @@ class LLMClient:
                     }
                 )
                 raise RuntimeError(f"LLM request failed: {detail}") from exc
+
+    def probe_native_tools(self) -> bool:
+        probe_tool = {
+            "type": "function",
+            "function": {
+                "name": "capability_probe",
+                "description": "Return whether native tool calling is available.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"ok": {"type": "boolean"}},
+                    "required": ["ok"],
+                    "additionalProperties": False,
+                },
+            },
+        }
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a capability probe. Use the provided tool if available.",
+            },
+            {"role": "user", "content": "Call capability_probe with ok=true."},
+        ]
+        result = self.chat(
+            messages,
+            [probe_tool],
+            tool_choice={"type": "function", "function": {"name": "capability_probe"}},
+            require_bash_tool=False,
+        )
+        message = result["choices"][0]["message"]
+        tool_calls = message.get("tool_calls") or []
+        return any(
+            call.get("function", {}).get("name") == "capability_probe" for call in tool_calls
+        )

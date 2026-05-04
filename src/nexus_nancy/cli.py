@@ -114,6 +114,11 @@ def _config_with_mock_server(cfg: Config, port: int) -> Config:
         max_preflight_tokens=cfg.max_preflight_tokens,
         sandbox_root=cfg.sandbox_root,
         max_attachment_bytes=cfg.max_attachment_bytes,
+        execution_strategy=cfg.execution_strategy,
+        native_tools=cfg.native_tools,
+        reasoning_channel=cfg.reasoning_channel,
+        parallel_tool_calls=cfg.parallel_tool_calls,
+        capability_probe=cfg.capability_probe,
     )
 
 

@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
 import shlex
 import subprocess
+from dataclasses import dataclass
+from pathlib import Path
 
 import bashlex
-
 
 BLOCKED_COMMANDS = {
     "sudo",

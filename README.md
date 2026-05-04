@@ -44,6 +44,14 @@ The live system prompt is read from `.agents/instructions.txt` and rendered at r
 
 Set `user_display_name` in `.agents/nnancy.yaml` to control the user label shown in the TUI transcript (default: `USER`).
 
+Execution routing is controlled in `.agents/nnancy.yaml`:
+
+- `execution_strategy: auto` uses native OpenAI-style tool calls only after support is verified.
+- `execution_strategy: universal` always uses the compatibility text harness.
+- `execution_strategy: native_openai` requires verified native tool support and fails loudly otherwise.
+- `native_tools`, `reasoning_channel`, and `parallel_tool_calls` default to `auto`; set a boolean only when you want an explicit override.
+- `capability_probe: true` enables a cheap live probe that asks the provider to return a synthetic tool call without executing any local tool.
+
 Edit these with:
 
 ```bash
@@ -66,7 +74,7 @@ nnancy config
 nnancy instructions
 ```
 
-`nnancy doctor` checks workspace bootstrap files, sandbox root, API key source, key-file permissions, and base URL health via `<base_url>/models`.
+`nnancy doctor` checks workspace bootstrap files, sandbox root, API key source, key-file permissions, selected execution route, detected capability status, and base URL health via `<base_url>/models`.
 
 `sandbox_allowlist.txt` supports one substring per line. If a substring appears in a command, substring-based sandbox blocks are bypassed for that command.
 
@@ -96,12 +104,20 @@ Inside the prompt:
 - `/key NEW_API_KEY` replaces API key file contents
 - `@relative/path` inlines file content into your prompt
 
-Assistant protocol:
+Universal assistant protocol:
 
 - User-visible assistant text must be inside `[RESPONSE]...[/RESPONSE]`
 - Any other assistant text is treated as private raw/debug output
 - Each completed assistant turn must end with `[EOT]`
 - Tool calls must use JSON arguments that exactly match the surfaced tool schema
+
+Native OpenAI route:
+
+- Native mode sends tools through the OpenAI-compatible `tools` payload.
+- Assistant text is shown directly and is not parsed for `[RESPONSE]` wrappers.
+- If a provider returns a valid JSON tool call in plain text instead of `tool_calls`, Nexus-Nancy treats it as a raw function call safety net.
+- Local models such as Gemma or Llama variants are most reliable when their backend supports native chat templates, for example llama.cpp with Jinja templating enabled.
+- Providers that claim OpenAI compatibility may still reject tools, ignore tools, or return malformed calls; leave `execution_strategy: auto` unless native support is known or verified.
 
 In the Textual TUI, you can also run `/key` with no argument to set the key via hidden prompts (value + confirmation) without echoing the key to screen.
 

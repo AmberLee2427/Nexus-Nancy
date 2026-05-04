@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from .config import Config
 from .logging_text import TextLog
@@ -14,6 +15,8 @@ class SessionState:
     workspace_root: Path
     log: TextLog
     messages: list[dict] = field(default_factory=list)
+    execution_strategy: str = "universal"
+    capabilities: Any = None
 
     @classmethod
     def create(
@@ -22,7 +25,7 @@ class SessionState:
         system_prompt: str,
         workspace_root: Path,
         logs_dir: Path,
-    ) -> "SessionState":
+    ) -> SessionState:
         state = cls(
             cfg=cfg,
             system_prompt=system_prompt,
