@@ -1,5 +1,8 @@
 # TODO: Split Native Tool/Reasoning Route From Universal Harness Route
 
+  Session   Monitoring Gemma 4 TODO.md progress
+  Continue  opencode -s ses_20f8afeb1ffehVxu1Fc7GzB2RG
+
 ## Goal
 
 Add an execution switcher that uses a native OpenAI-compatible tool/reasoning path when the configured model can be verified to support it, and falls back to the current universal dumb-model loop when those capabilities are unknown or unsupported.
