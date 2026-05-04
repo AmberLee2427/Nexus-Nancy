@@ -52,7 +52,7 @@ class ToolRegistry:
         core = [
             ToolDefinition(
                 name="bash",
-                description="Run a shell command with zsh -lc inside the local sandbox root.",
+                description="Run a shell command with zsh -lc (or bash -lc) in the local sandbox.",
                 parameters={
                     "type": "object",
                     "properties": {
@@ -229,14 +229,16 @@ def notebook_set_cell(path: Path, cell_index: int, source: str) -> str:
 
 
 def run_bash(command: str, sandbox: SandboxPolicy) -> str:
+    import shutil
     ok, reason = sandbox.validate(command)
     if not ok:
         # Surface the sandbox reason directly. Users need the actual block
         # predicate, not a generic refusal.
         return f"error: {reason}"
 
+    shell_cmd = "zsh" if shutil.which("zsh") else "bash"
     proc = subprocess.run(
-        ["zsh", "-lc", command],
+        [shell_cmd, "-lc", command],
         cwd=str(sandbox.root),
         text=True,
         capture_output=True,

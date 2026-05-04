@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.1] - 2026-05-04
+
+### Fixed
+- Fixed a bug where the `bash` tool would crash with a `FileNotFoundError` on CI environments (like Ubuntu GitHub Actions runners) that don't have `zsh` installed by default. It now falls back gracefully to `bash`.
+
 ## [1.0.0] - 2026-05-04
 
 ### Added
