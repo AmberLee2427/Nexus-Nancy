@@ -23,7 +23,7 @@ from .execution import STRATEGY_NATIVE_OPENAI, STRATEGY_UNIVERSAL, select_execut
 from .llm import LLMClient
 from .sandbox import SandboxPolicy
 from .session import SessionState
-from .tools import TOOL_SPECS, execute_tool, initialize_tools, validate_tool_arguments
+from .tools import REGISTRY, TOOL_SPECS, execute_tool, initialize_tools, validate_tool_arguments
 
 EOT_TOKEN = "[EOT]"
 MAX_NO_TOOL_ASSISTANT_MESSAGES_WITHOUT_EOT = 2
@@ -537,6 +537,28 @@ def run_prompt(
     tool_approval: ToolApprovalHandler | None = None,
 ) -> PromptResult:
     command = user_text.strip()
+
+    # Check for extensible slash commands from tools first
+    if command.startswith("/"):
+        cmd_parts = command.split()
+        cmd_name = cmd_parts[0]
+        tool = REGISTRY.get_slash_command(cmd_name)
+        if tool and tool.handler:
+            # Parse arguments: "/reload reason=foo bar" -> {"reason": "foo bar"}
+            args = {}
+            for part in cmd_parts[1:]:
+                if "=" in part:
+                    key, value = part.split("=", 1)
+                    args[key] = value
+                else:
+                    args[part] = ""
+            try:
+                result = tool.handler(**args)
+                return PromptResult(system_messages=[result])
+            except Exception as e:
+                return PromptResult(system_messages=[f"error executing {cmd_name}: {e}"])
+
+    # Built-in slash commands
     if command == "/config":
         path = open_config_in_editor(state.workspace_root)
         return PromptResult(system_messages=[f"opened config file: {path}"])

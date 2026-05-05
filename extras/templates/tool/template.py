@@ -36,6 +36,9 @@ def register_tools():
                 },
                 "required": []
             },
-            handler=hello
+            handler=hello,
+            # slash_command: Optional command users can type directly (e.g., "/hello")
+            # If set, tool can be called by model (as tool) or user (as slash command)
+            slash_command=None
         )
     ]

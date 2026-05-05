@@ -25,6 +25,8 @@ def register_tools():
                 },
                 "required": []
             },
-            handler=hello
+            handler=hello,
+            # slash_command: Optional command users can type directly (e.g., "/hello")
+            slash_command=None
         )
     ]

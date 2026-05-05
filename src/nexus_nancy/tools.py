@@ -20,6 +20,9 @@ class ToolDefinition:
     # The actual implementation function.
     # Must accept (**args, sandbox=SandboxPolicy).
     handler: Any = None
+    # Optional slash command for direct user invocation (e.g., "/reload")
+    # If set, the tool can be called both by model (as tool) and user (as slash command)
+    slash_command: str | None = None
 
     def __post_init__(self):
         if self.handler is None:
@@ -46,6 +49,7 @@ class NancyPlugin(Protocol):
 class ToolRegistry:
     def __init__(self):
         self._tools: dict[str, ToolDefinition] = {}
+        self._slash_commands: dict[str, ToolDefinition] = {}
         self._load_core_tools()
 
     def _load_core_tools(self):
@@ -114,6 +118,11 @@ class ToolRegistry:
 
     def register(self, tool: ToolDefinition):
         self._tools[tool.name] = tool
+        if tool.slash_command:
+            self._slash_commands[tool.slash_command] = tool
+
+    def get_slash_command(self, command: str) -> ToolDefinition | None:
+        return self._slash_commands.get(command)
 
     def load_plugins(self, workspace_root: Path):
         # 1. Option A: Entry Points (Installed pip packages)

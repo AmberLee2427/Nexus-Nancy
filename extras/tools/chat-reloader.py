@@ -51,6 +51,7 @@ def register_tools():
                 },
                 "required": []
             },
-            handler=reload_chat
+            handler=reload_chat,
+            slash_command="/reload"
         )
     ]
