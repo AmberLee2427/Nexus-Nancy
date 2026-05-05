@@ -1,0 +1,6 @@
+{
+    "name": "chat-reloader",
+    "description": "A Nexus-Nancy plugin to reload the chat session",
+    "author": "Your Name",
+    "email": "you@example.com"
+}

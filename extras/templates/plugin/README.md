@@ -2,48 +2,71 @@
 
 This is a template for creating pip-installable plugins (Option A) for Nexus-Nancy.
 
-## Quick Start
+## Two Ways to Use
 
-1. Rename `nancy-TEMPLATE` to your plugin name in `pyproject.toml`
-2. Rename `src/nancy_TEMPLATE/` directory to match
-3. Update entry point in `pyproject.toml` (e.g., `mytool = "nancy_mytool.plugin"`)
-4. Edit `plugin.py` to add your tool functionality
-
-## Installation
-
+### Option 1: Cookiecutter (Recommended)
 ```bash
-# From the plugin directory
-pip install .
-
-# Or in editable mode for development
-pip install -e .
+pip install cookiecutter
+cookiecutter https://github.com/AmberLee2427/Nexus-Nancy.git --directory extras/templates/plugin
 ```
 
-## Verification
+This will prompt for:
+- `name` - Plugin name (e.g., `chat-reloader`)
+- `description` - One-line description
+- `author` - Your name
+- `email` - Your email
 
+### Option 2: Manual Copy
 ```bash
-nnancy doctor
+cp -r extras/templates/plugin my-plugin-name
+# Then edit files to replace TEMPLATE with your name
 ```
-
-You should see your plugin listed in the tools count.
 
 ## Structure
 
 ```
-nancy-TEMPLATE/
-├── pyproject.toml              # Package config with entry point
+nancy-{name}/
+├── .github/workflows/
+│   ├── ci.yml           # Runs tests on push/PR
+│   └── release.yml      # Builds & publishes to PyPI on release
+├── pyproject.toml       # Package config with entry point
 ├── src/
-│   └── nancy_TEMPLATE/
-│       ├── __init__.py         # Version
-│       └── plugin.py           # register_tools() + handlers
+│   └── nancy_{name}/
+│       ├── __init__.py  # Version
+│       └── plugin.py    # register_tools() + handlers
+├── cookiecutter.json    # Default values
 └── README.md
 ```
 
-## Publishing to PyPI
+## Development
 
-1. Update `pyproject.toml` with your details (author, description, etc.)
-2. Build: `pip install build && python -m build`
-3. Upload: `pip install twine && twine upload dist/*`
+```bash
+# Install in editable mode
+pip install -e .
+
+# Verify it loads
+nnancy doctor
+```
+
+Your plugin will be auto-discovered via the `nexus_nancy.plugins` entry point.
+
+## CI/CD
+
+- **CI** (ci.yml): Runs on every push/PR - installs nexus-nancy and verifies plugin loads
+- **Release** (release.yml): Runs on GitHub release - builds wheel and publishes to PyPI
+
+To enable PyPI publishing:
+1. Set `PYPI_API_TOKEN` secret in your repo settings (or use trusted publishing)
+2. Create a release on GitHub
+3. The workflow will build and publish automatically
+
+## Publishing to PyPI Manually
+
+```bash
+pip install build twine
+python -m build
+twine upload dist/*
+```
 
 ## Naming Convention
 
