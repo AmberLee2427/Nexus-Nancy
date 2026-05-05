@@ -16,9 +16,7 @@ class TextLog:
         self.file_path = self.root / f"session-{ts}.log"
         # Session logs are intentionally plain text artifacts for inspection by
         # humans. Do not compact, sanitize, or hide diagnostic content here.
-        self.file_path.write_text(
-            f"# Nexus-Nancy session {ts}\\n", encoding="utf-8"
-        )
+        self.file_path.write_text(f"# Nexus-Nancy session {ts}\\n", encoding="utf-8")
 
     def write(self, role: str, text: str) -> None:
         stamp = datetime.now().strftime("%H:%M:%S")

@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+    # Only trigger CI on tag push, but subsequent jobs (like publish and github-release) will require manual intervention.
   workflow_dispatch:
     inputs:
       version:
@@ -15,6 +16,7 @@ on:
         required: false
         default: false
         type: boolean
+
 
 permissions:
   contents: write

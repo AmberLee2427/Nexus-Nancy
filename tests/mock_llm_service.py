@@ -260,8 +260,7 @@ def _chat_completion_response(body: dict[str, Any]) -> dict[str, Any]:
         message = {
             "role": "assistant",
             "content": (
-                f"{random.choice(PRIVATE_PADDING_LINES)}\n"
-                "Executing requested tool test commands.\n"
+                f"{random.choice(PRIVATE_PADDING_LINES)}\nExecuting requested tool test commands.\n"
             ),
             "tool_calls": tool_calls,
         }

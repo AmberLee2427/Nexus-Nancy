@@ -18,6 +18,7 @@ class LLMClient:
 
         if cfg.auth_type == "codex":
             from .auth import get_codex_token
+
             session_file = codex_session_path(cfg, workspace_root)
             token = get_codex_token(session_file)
             if token:
@@ -41,14 +42,14 @@ class LLMClient:
         parsed = urlparse(self.cfg.base_url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise RuntimeError(
-                "Invalid base_url in config. Expected absolute URL like "
-                "https://api.openai.com/v1"
+                "Invalid base_url in config. Expected absolute URL like https://api.openai.com/v1"
             )
 
-        if (
-            len(self.api_key.strip()) < 12
-            and self.api_key.lower() not in {"local", "none", "false"}
-        ):
+        if len(self.api_key.strip()) < 12 and self.api_key.lower() not in {
+            "local",
+            "none",
+            "false",
+        }:
             raise RuntimeError("API key looks too short. Refusing request.")
 
     def _validate_tools(self, tools: list[dict[str, Any]], *, require_bash: bool = True) -> None:

@@ -89,9 +89,7 @@ class PromptResult:
 
     def add_private(self, text: str, index: int, note: str = "") -> None:
         self.private_blocks.append(text)
-        self.transcript_events.append(
-            TranscriptEvent(kind="raw", title=f"RAW {index}", text=text)
-        )
+        self.transcript_events.append(TranscriptEvent(kind="raw", title=f"RAW {index}", text=text))
         # Store the note in the event text or metadata if we had it,
         # but for now we'll just prefix the text with the note.
         if note:
@@ -568,9 +566,7 @@ def run_prompt(
 
         chat_history = state.messages[:]
         assistant_raw_blocks = [
-            m
-            for m in chat_history
-            if m.get("role") == "assistant" and m.get("content")
+            m for m in chat_history if m.get("role") == "assistant" and m.get("content")
         ]
         tool_outputs = [m for m in chat_history if m.get("role") == "tool"]
         if not assistant_raw_blocks:

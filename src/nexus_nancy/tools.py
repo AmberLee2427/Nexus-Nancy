@@ -230,6 +230,7 @@ def notebook_set_cell(path: Path, cell_index: int, source: str) -> str:
 
 def run_bash(command: str, sandbox: SandboxPolicy) -> str:
     import shutil
+
     ok, reason = sandbox.validate(command)
     if not ok:
         # Surface the sandbox reason directly. Users need the actual block
@@ -273,8 +274,7 @@ def render_tools_block() -> str:
             desc = spec.get("description", "").strip()
             description = desc or "No description."
             lines.append(
-                f"    - {key} ({type_name}, {required_label}{default_text}): "
-                f"{description}"
+                f"    - {key} ({type_name}, {required_label}{default_text}): {description}"
             )
     return "\n".join(lines)
 

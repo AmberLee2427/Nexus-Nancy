@@ -264,10 +264,7 @@ class NancyTUI(App[None]):
         )
 
         # 1. Permanent Header
-        header = (
-            f"Nancy System Ready\n"
-            f"Mode: {loop_name}"
-        )
+        header = f"Nancy System Ready\nMode: {loop_name}"
         await self._append_block("system", "SYS", header)
 
         # 2. Collapsible Health Snapshot
@@ -285,10 +282,7 @@ class NancyTUI(App[None]):
             clean = clean.replace("config_file:", "Config").replace("workspace:", "Root")
             snapshot_lines.append(clean.strip())
 
-        await self._append_debug_block(
-            "SYSTEM HEALTH SNAPSHOT",
-            "\n".join(snapshot_lines)
-        )
+        await self._append_debug_block("SYSTEM HEALTH SNAPSHOT", "\n".join(snapshot_lines))
 
         # 3. Permanent Footer
         logs_path = self.state.workspace_root / "logs"

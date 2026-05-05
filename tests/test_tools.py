@@ -9,23 +9,28 @@ def test_registry_loads_core_tools():
     assert registry.get("bash") is not None
     assert registry.get("notebook_read") is not None
 
+
 def test_registry_loads_local_tools(tmp_path):
     # Setup a mock local tool
     tools_dir = tmp_path / ".agents" / "tools"
     tools_dir.mkdir(parents=True)
     tool_file = tools_dir / "test_tool.py"
-    tool_file.write_text("""
+    tool_file.write_text(
+        """
 from nexus_nancy.tools import ToolDefinition
 def my_handler(**kwargs): return "ok"
 def register_tools():
     return [ToolDefinition(name="test_tool", description="desc", parameters={}, handler=my_handler)]
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     registry = ToolRegistry()
     registry.load_plugins(tmp_path)
 
     assert registry.get("test_tool") is not None
     assert registry.get("test_tool").description == "desc"
+
 
 def test_registry_executes_plugin_handler():
     registry = ToolRegistry()
@@ -45,6 +50,7 @@ def test_registry_executes_plugin_handler():
         result = execute_tool("plug", {}, sandbox)
         assert result == "success"
         mock_handler.assert_called_once()
+
 
 def test_registry_loads_entry_points():
     mock_ep = mock.Mock()

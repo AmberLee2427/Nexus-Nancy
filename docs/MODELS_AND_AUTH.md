@@ -52,6 +52,18 @@ api_key_env: OPENAI_API_KEY
 base_url: https://api.openai.com/v1
 ```
 
+### Setting Up Your API Key
+
+To securely add your API key:
+
+```bash
+nnancy secrets
+```
+
+This opens `.agents/secrets/openai.key` in your editor. Write your key to this file and save. The key is read on startup and validated before any API calls.
+
+Alternatively, set the `OPENAI_API_KEY` environment variable.
+
 ## Model Switching Strategy
 Nancy follows a **Minimalist Configuration** philosophy. We do not provide commands to switch models (e.g., `nnancy use gpt-4`). Instead, we encourage users to edit the `.agents/nnancy.yaml` file directly. 
 

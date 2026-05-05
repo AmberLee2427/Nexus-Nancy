@@ -185,8 +185,7 @@ def load_instructions(workspace_root: Path) -> str:
     path = instructions_path(workspace_root)
     if not path.exists():
         raise RuntimeError(
-            "Missing system prompt file. Refusing to invent one.\n"
-            f"expected_path: {path}"
+            f"Missing system prompt file. Refusing to invent one.\nexpected_path: {path}"
         )
     # Instructions are loaded verbatim from the workspace. This project does
     # not try to hide the prompt or launder it into something safer-looking.
@@ -245,6 +244,16 @@ def open_config_in_editor(workspace_root: Path) -> Path:
     open_in_editor(path)
     _normalize_config_paths_on_save(path, workspace_root)
     return path
+
+
+def open_secrets_in_editor(workspace_root: Path) -> Path:
+    cfg = load_config(workspace_root)
+    key_file = api_key_path(cfg, workspace_root)
+    key_file.parent.mkdir(parents=True, exist_ok=True)
+    if not key_file.exists():
+        key_file.write_text("", encoding="utf-8")
+    open_in_editor(key_file)
+    return key_file
 
 
 def _normalize_config_paths_on_save(path: Path, workspace_root: Path) -> None:

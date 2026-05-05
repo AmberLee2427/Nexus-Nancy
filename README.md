@@ -25,6 +25,7 @@ pip install -e .
 On first run in any directory, Nexus-Nancy creates local files in `.agents/`:
 
 - `.agents/nnancy.yaml`
+- `.agents/secrets/openai.key`
 - `.agents/sandbox_allowlist.txt`
 - `.agents/instructions.txt`
 - `.agents/relay_instructions.txt`
@@ -38,6 +39,12 @@ API key resolution order:
 2. env var from `api_key_env` (default `OPENAI_API_KEY`)
 
 For shared environments, using the local key file is recommended.
+
+To add your API key before first run, use:
+
+```bash
+nnancy secrets
+```
 
 Before any provider call, Nexus-Nancy runs strict preflight validation: API key/base URL sanity, required message structure (system + user), tool spec integrity (including `bash`), and request-size guard via `max_preflight_tokens`.
 The live system prompt is read from `.agents/instructions.txt` and rendered at runtime, including a dynamically generated tools block.
@@ -57,6 +64,7 @@ Edit these with:
 ```bash
 nnancy config
 nnancy instructions
+nnancy secrets
 ```
 
 For API key management during chat sessions:
@@ -78,6 +86,7 @@ nnancy -t "summarize @README.md"
 nnancy doctor
 nnancy config
 nnancy instructions
+nnancy secrets
 ```
 
 `nnancy doctor` checks workspace bootstrap files, sandbox root, API key source, key-file permissions, selected execution route, detected capability status, and base URL health via `<base_url>/models`.

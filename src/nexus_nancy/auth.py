@@ -39,18 +39,20 @@ def login_codex(session_path: Path):
     redirect_uri = f"http://localhost:{port}/callback"
 
     state = secrets.token_urlsafe(16)
-    auth_url = "https://auth.openai.com/authorize?" + urlencode({
-        "client_id": client_id,
-        "audience": "https://api.openai.com/v1",
-        "response_type": "code",
-        "redirect_uri": redirect_uri,
-        "scope": "openid profile email offline_access",
-        "state": state,
-    })
+    auth_url = "https://auth.openai.com/authorize?" + urlencode(
+        {
+            "client_id": client_id,
+            "audience": "https://api.openai.com/v1",
+            "response_type": "code",
+            "redirect_uri": redirect_uri,
+            "scope": "openid profile email offline_access",
+            "state": state,
+        }
+    )
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print(" OPENAI CODEX LOGIN (CHATGPT PLUS)".center(60))
-    print("="*60)
+    print("=" * 60)
     print("\nThis command will authenticate Nexus-Nancy using your ChatGPT Plus")
     print("subscription. Follow these steps to authorize this machine:\n")
     print(f"1. OPEN this URL in your local web browser:\n\n   {auth_url}\n")
@@ -112,12 +114,15 @@ def login_codex(session_path: Path):
 
     print("\n[OK] Identity verified. Exchanging code for tokens...")
 
-    resp = requests.post("https://auth.openai.com/oauth/token", json={
-        "client_id": client_id,
-        "code": server.auth_code,
-        "grant_type": "authorization_code",
-        "redirect_uri": redirect_uri,
-    })
+    resp = requests.post(
+        "https://auth.openai.com/oauth/token",
+        json={
+            "client_id": client_id,
+            "code": server.auth_code,
+            "grant_type": "authorization_code",
+            "redirect_uri": redirect_uri,
+        },
+    )
 
     if not resp.ok:
         raise RuntimeError(f"Token exchange failed: {resp.text}")

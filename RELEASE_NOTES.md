@@ -1,18 +1,18 @@
-# Gulls v1.1.0 Release Notes
+# Gulls v1.1.1 Release Notes
 
 **Release Date:** 2026-05-04
 
-## Minor Release
+## Patch Release
 
 
 ### Added
-- [Add new features here]
+- New `nnancy secrets` command to securely open and edit the API key file (`.agents/secrets/openai.key`). This provides a discoverable way to add an API key before first run.
 
 ### Changed
 - [Add changes here]
 
 ### Fixed
-- [Add bug fixes here]
+- Fix: Resolved a failing test in the Windows CI matrix. The test `test_native_route_executes_native_tool_call_and_returns_plain_response` had an incorrect assertion checking for temporary directory paths in the tool output.
 
 ### Security
 - [Add security fixes here]

@@ -15,6 +15,7 @@ from .config import (
     load_config,
     open_config_in_editor,
     open_in_editor,
+    open_secrets_in_editor,
 )
 from .doctor import run_doctor
 from .tools import initialize_tools
@@ -39,6 +40,7 @@ Commands:
     nnancy doctor          Run a diagnostic health check on the LLM and API key.
     nnancy instructions    Open the system prompt instructions file in your editor.
     nnancy config          Open the nnancy.yaml configuration file in your editor.
+    nnancy secrets         Open the secrets file (API key) in your editor.
     nnancy auth login      Log in to ChatGPT Plus via OAuth (Codex mode).
 
 Interactive Chat Commands (in TUI):
@@ -152,7 +154,7 @@ def _parse_args(
         if arg == "auth" and i + 1 < len(args) and args[i + 1] == "login":
             command = "auth login"
             i += 2
-        elif arg in {"instructions", "config", "doctor"}:
+        elif arg in {"instructions", "config", "secrets", "doctor"}:
             command = arg
             i += 1
         elif arg in {"-h", "--help"}:
@@ -218,9 +220,14 @@ def main() -> None:
         open_config_in_editor(workspace_root)
         return
 
+    if command == "secrets":
+        open_secrets_in_editor(workspace_root)
+        return
+
     if command == "auth login":
         from .auth import login_codex
         from .config import codex_session_path
+
         cfg = load_config(workspace_root)
         login_codex(codex_session_path(cfg, workspace_root))
         return

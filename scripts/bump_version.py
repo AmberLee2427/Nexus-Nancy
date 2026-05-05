@@ -275,7 +275,8 @@ def generate_release_notes_from_changelog(version):
         release_lines.append("---")
         release_lines.append("")
         release_lines.append(
-            f"**Previous Release:** v{'.'.join(version.split('.')[:-1])}.{int(version.split('.')[-1]) - 1 if int(version.split('.')[-1]) > 0 else '0'}"
+            f"**Previous Release:** v{'.'.join(version.split('.')[:-1])}."
+            f"{int(version.split('.')[-1]) - 1 if int(version.split('.')[-1]) > 0 else '0'}"
         )
 
     return "\n".join(release_lines)
@@ -297,7 +298,8 @@ def update_release_notes(new_version):
         if version_match:
             existing_version = version_match.group(1)
             print(
-                f"RELEASE_NOTES.md exists for version {existing_version}, but we're releasing {new_version}"
+                f"RELEASE_NOTES.md exists for version {existing_version}, "
+                f"but we're releasing {new_version}"
             )
             response = input(f"Replace RELEASE_NOTES.md with new version {new_version}? (y/N): ")
             if response.lower() not in ["y", "yes"]:
@@ -312,7 +314,8 @@ def update_release_notes(new_version):
         release_notes_path.write_text(release_content)
         print(f"Created/updated RELEASE_NOTES.md for version {new_version}")
         print(
-            "You can edit RELEASE_NOTES.md to customize the release notes before creating the release"
+            "You can edit RELEASE_NOTES.md to customize the release notes "
+            "before creating the release"
         )
     else:
         print("Could not generate release notes from changelog")
@@ -409,10 +412,18 @@ def run_lint() -> None:
     """Run linting before finalizing a release."""
     print("Running style checks (Ruff)...")
     try:
-        subprocess.run(["python3", "-m", "ruff", "check", "src", "tests"], check=True)
+        result = subprocess.run(["ruff", "check", "src", "tests"], check=False)
+        if result.returncode != 0 and result.returncode != 127:
+            raise subprocess.CalledProcessError(result.returncode, ["ruff"])
+        if result.returncode == 127:
+            subprocess.run(["python3", "-m", "ruff", "check", "src", "tests"], check=True)
         print("Style checks passed.")
     except subprocess.CalledProcessError:
         raise RuntimeError("Style checks failed. Fix the issues before releasing.")
+    except FileNotFoundError:
+        raise RuntimeError(
+            "Ruff not found. Install with 'pip install ruff' or ensure ruff is in your PATH."
+        )
 
 
 def main():
