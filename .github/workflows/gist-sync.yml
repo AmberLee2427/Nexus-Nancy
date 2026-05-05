@@ -1,0 +1,37 @@
+name: Sync Gists
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "extras/templates/tool/**"
+      - "extras/tools/**"
+
+jobs:
+  sync-tool-template:
+    name: Sync tool template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync tool template to gist
+        uses: xSAVIKx/gist-uploader-action@v1.0
+        with:
+          gist_id: "f53f93730cc25b54dbaa66f8cb6ed8b3"
+          filename: "template.py"
+          file: "extras/templates/tool/template.py"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+  sync-chat-reloader:
+    name: Sync chat-reloader tool
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync chat-reloader to gist
+        uses: xSAVIKx/gist-uploader-action@v1.0
+        with:
+          gist_id: "f53f93730cc25b54dbaa66f8cb6ed8b3"
+          filename: "chat-reloader.py"
+          file: "extras/tools/chat-reloader.py"
+          github_token: ${{ secrets.GITHUB_TOKEN }}

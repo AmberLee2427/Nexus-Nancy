@@ -2,7 +2,7 @@ project = "Nexus-Nancy"
 author = "Nexus-Nancy Maintainers"
 release = "1.1.1"
 
-extensions = []
+extensions = ["myst_parser"]
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]

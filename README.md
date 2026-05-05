@@ -76,7 +76,17 @@ For API key management during chat sessions:
 
 - [Models & Authentication](docs/MODELS_AND_AUTH.md) - Using Gemma 4, ChatGPT Plus ($20/mo), and standard API.
 - [Extending Nancy](docs/PLUGINS.md) - How to write and install custom tools.
-- [Capability Detection](docs/CAPABILITIES.md) - How Nancy detects tool-calling and reasoning support.
+- [Extras](extras/README.md) - Official plugins, tools, and templates.
+
+## Extras
+
+Official extensions are in the `extras/` directory:
+
+- **Tools**: Single-file scripts in `extras/tools/` - copy to `.agents/tools/`
+- **Plugins**: Pip-installable packages in `extras/plugins/`
+- **Templates**: Start points for building your own tools or plugins
+
+See [extras/README.md](extras/README.md) for the full registry.
 
 ## Usage
 

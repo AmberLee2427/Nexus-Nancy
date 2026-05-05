@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nancy-TEMPLATE"
+version = "0.1.0"
+description = "A Nexus-Nancy plugin"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["nexus-nancy"]
+
+[project.entry-points."nexus_nancy.plugins"]
+TEMPLATE = "nancy_TEMPLATE.plugin"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nancy_TEMPLATE"]

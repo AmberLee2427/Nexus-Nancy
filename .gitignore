@@ -8,6 +8,7 @@ logs/
 *.egg-info
 dist/
 build/
+docs/_build/
 
 # allow committed prompt templates
 !.agents/
