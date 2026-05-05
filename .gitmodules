@@ -1,0 +1,3 @@
+[submodule "extras/templates/plugin"]
+	path = extras/templates/plugin
+	url = https://github.com/AmberLee2427/nancy-plugin-template.git
