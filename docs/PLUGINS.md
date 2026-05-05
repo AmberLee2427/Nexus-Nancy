@@ -5,7 +5,31 @@ Nexus-Nancy is built to be extensible without requiring a heavy harness or Node.
 ## Option A: Installed Plugins (Entry Points)
 This is the standard way to distribute and share Nancy tools via `pip`. Any package that registers a `nexus_nancy.plugins` entry point will be automatically discovered by Nancy.
 
-### Creating a Plugin
+### Creating a Plugin (Recommended: Use Cookiecutter)
+
+The easiest way to create a new plugin is with the official cookiecutter template:
+
+```bash
+pip install cookiecutter
+cookiecutter https://github.com/AmberLee2427/Nexus-Nancy.git --directory extras/templates/plugin
+```
+
+This will prompt for:
+- `name` - Plugin name (e.g., `chat-reloader`)
+- `description` - One-line description
+- `author` - Your name
+- `email` - Your email
+
+The template includes:
+- `pyproject.toml` with proper entry point configuration
+- CI workflow (verifies plugin loads)
+- Release workflow (publishes to PyPI on GitHub release)
+- Basic hello-world plugin to verify everything works
+
+### Manual Plugin Creation
+
+If you prefer to create from scratch:
+
 1. Create a Python package.
 2. Define a function or module that implements a `register_tools()` function returning a list of `ToolDefinition` objects.
 3. Add the following to your `pyproject.toml`:
