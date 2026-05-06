@@ -182,6 +182,7 @@ def login_codex(session_path: Path):
                 "subject_token": id_token,
                 "subject_token_type": "urn:ietf:params:oauth:token-type:id_token",
                 "audience": "https://api.openai.com/v1",
+                "scope": "model.request model.read api.model.read api.responses.write",
             },
         )
         if exchange_resp.ok:
