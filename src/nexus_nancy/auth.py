@@ -195,8 +195,8 @@ def login_codex(session_path: Path):
         if proj_id:
             tokens["project_id"] = proj_id
 
-        # Attempt upgrade (only if we have the expected claims, to avoid noisy errors)
-        if (id_claims or {}).get("organization_id"):
+        # Attempt upgrade (using ChatMock's minimal parameter set)
+        if org_id:
             print("[INFO] Attempting to upgrade session to persistent API key...")
             today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
             exchange_data = {
@@ -207,6 +207,8 @@ def login_codex(session_path: Path):
                 "subject_token_type": "urn:ietf:params:oauth:token-type:id_token",
                 "name": f"Nexus-Nancy [auto-generated] ({today})",
             }
+            # Note: We do NOT send organization/project in the body here,
+            # matching ChatMock's working implementation.
             exchange_resp = requests.post(
                 "https://auth.openai.com/oauth/token",
                 data=exchange_data,
@@ -215,6 +217,9 @@ def login_codex(session_path: Path):
                 exchange_tokens = exchange_resp.json()
                 tokens["api_key"] = exchange_tokens.get("access_token")
                 print("[OK] Persistent API key obtained.")
+            else:
+                print(f"[WARN] API key upgrade failed: {exchange_resp.text}")
+                print("[INFO] Falling back to standard session token.")
     
     session_path.parent.mkdir(parents=True, exist_ok=True)
     session_path.write_text(json.dumps(tokens, indent=2), encoding="utf-8")
