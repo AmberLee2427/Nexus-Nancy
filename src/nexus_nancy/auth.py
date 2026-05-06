@@ -106,12 +106,11 @@ def login_codex(session_path: Path):
     server = http.server.HTTPServer(("127.0.0.1", port), OAuthCallbackHandler)
     server.auth_code = None
     server.auth_state = None
+    server.timeout = 0.5  # Short timeout for handle_request
 
     def _serve():
-        try:
-            server.handle_request()
-        except Exception:
-            pass
+        # Listen for a single request
+        server.handle_request()
 
     t = threading.Thread(target=_serve, daemon=True)
     t.start()
@@ -125,15 +124,26 @@ def login_codex(session_path: Path):
 
     if manual_url:
         try:
+            # Parse manually first
             query = parse_qs(urlparse(manual_url).query)
-            server.auth_code = query.get("code", [None])[0]
-            server.auth_state = query.get("state", [None])[0]
-            # Send a dummy request to cleanly unblock the server thread
-            requests.get(redirect_uri, timeout=1)
+            code = query.get("code", [None])[0]
+            state_val = query.get("state", [None])[0]
+            
+            if code and state_val:
+                server.auth_code = code
+                server.auth_state = state_val
+            
+            # Unblock the server thread by sending a dummy request to ITSELF
+            try:
+                requests.get(f"http://127.0.0.1:{port}/unblock", timeout=0.1)
+            except Exception:
+                pass
         except Exception as e:
             print(f"Error parsing URL: {e}")
 
-    t.join(timeout=2)
+    # Wait for server thread to finish (either caught redirect or was unblocked)
+    t.join(timeout=5)
+    server.server_close()
 
     if not server.auth_code or server.auth_state != state:
         print("\n[FAIL] Login timed out or invalid URL provided.")
