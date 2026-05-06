@@ -55,9 +55,9 @@ def login_codex(session_path: Path):
     import threading
 
     client_id = "app_EMoamEEZ73f0CkXaXp7hrann"
-    # Port 18081 is a common local callback port for this flow.
-    port = 18081
-    redirect_uri = f"http://localhost:{port}/callback"
+    # Port 1455 is the standard callback port for the Codex CLI flow.
+    port = 1455
+    redirect_uri = f"http://localhost:{port}/auth/callback"
 
     state = secrets.token_urlsafe(16)
     code_verifier, code_challenge = generate_pkce()
@@ -72,7 +72,9 @@ def login_codex(session_path: Path):
             "state": state,
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
+            "prompt": "login",
             "codex_cli_simplified_flow": "true",
+            "originator": "codex_cli_rs",
             "id_token_add_organizations": "true",
         }
     )
@@ -116,7 +118,7 @@ def login_codex(session_path: Path):
     t = threading.Thread(target=_serve, daemon=True)
     t.start()
 
-    print("(Listening on localhost:18081 for automatic local redirect...)")
+    print(f"(Listening on localhost:{port} for automatic local redirect...)")
 
     try:
         manual_url = input("\nPASTE REDIRECT URL HERE: ").strip()
