@@ -195,6 +195,13 @@ class NancyTUI(App[None]):
         border: round #9961d6;
     }
 
+    .system-not-ready-block {
+        background: #4a1515;
+        color: #ffcccc;
+        border: round #cc3333;
+        text-style: bold;
+    }
+
     .tool-block {
         background: #181325;
         color: #efe3ff;
@@ -264,8 +271,12 @@ class NancyTUI(App[None]):
         )
 
         # 1. Permanent Header
-        header = f"Nancy System Ready\nMode: {loop_name}"
-        await self._append_block("system", "SYS", header)
+        if report.ok:
+            header = f"Nancy System Ready\nMode: {loop_name}"
+            await self._append_block("system", "SYS", header)
+        else:
+            header = f"Nancy System NOT Ready 🔴\nMode: {loop_name}"
+            await self._append_block("system-not-ready", "SYS", header)
 
         # 2. Collapsible Health Snapshot
         snapshot_lines = []
@@ -282,7 +293,10 @@ class NancyTUI(App[None]):
             clean = clean.replace("config_file:", "Config").replace("workspace:", "Root")
             snapshot_lines.append(clean.strip())
 
-        await self._append_debug_block("SYSTEM HEALTH SNAPSHOT", "\n".join(snapshot_lines))
+        # Expand snapshot by default if system is not ready
+        await self._append_debug_block(
+            "SYSTEM HEALTH SNAPSHOT", "\n".join(snapshot_lines), expanded=not report.ok
+        )
 
         # 3. Permanent Footer
         logs_path = self.state.workspace_root / "logs"
@@ -446,7 +460,9 @@ class NancyTUI(App[None]):
     async def _append_raw_block(self, index: int, text: str) -> None:
         await self._append_debug_block(f"RAW {index}", text)
 
-    async def _append_debug_block(self, title: str, text: str) -> None:
+    async def _append_debug_block(
+        self, title: str, text: str, expanded: bool | None = None
+    ) -> None:
         transcript = self.query_one("#transcript", VerticalScroll)
         body = Static(Text(text or ""), classes="debug-body")
         widget = Collapsible(
@@ -455,7 +471,10 @@ class NancyTUI(App[None]):
             collapsed=True,
             classes="debug-block",
         )
-        widget.collapsed = self._debug_collapsed
+        if expanded is not None:
+            widget.collapsed = not expanded
+        else:
+            widget.collapsed = self._debug_collapsed
         self._debug_widgets.append(widget)
         self._plain_blocks.append((title, text))
         self._persist_transcript()
