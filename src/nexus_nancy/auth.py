@@ -197,6 +197,7 @@ def login_codex(session_path: Path):
             print(f"[INFO] Using project: {proj_id}")
 
         print("[INFO] Attempting to upgrade session to persistent API key...")
+        today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
         # OpenAI token-exchange parameters are sensitive.
         # We try to use the extracted organization_id if we found one.
         exchange_data = {
