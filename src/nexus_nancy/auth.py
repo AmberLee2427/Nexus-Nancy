@@ -171,38 +171,35 @@ def login_codex(session_path: Path):
 
     # Exchange session for a persistent sk-... API key
     if id_token:
+        auth_claim = (id_claims or {}).get("https://api.openai.com/auth", {})
         if id_claims:
-            print(f"[DEBUG] ID Token Claims: {list(id_claims.keys())}")
-            # Look for org/project info in the nested OpenAI claim
-            auth_claim = id_claims.get("https://api.openai.com/auth", {})
-            if isinstance(auth_claim, dict):
-                org_id = auth_claim.get("org_id") or auth_claim.get("organization_id")
-                proj_id = auth_claim.get("project_id")
-                if org_id:
-                    print(f"[INFO] Found organization_id in claims: {org_id}")
-                if proj_id:
-                    print(f"[INFO] Found project_id in claims: {proj_id}")
+            print(f"[DEBUG] ID Token Claims keys: {list(id_claims.keys())}")
+            print(f"[DEBUG] OpenAI Auth Claim: {json.dumps(auth_claim, indent=2)}")
+        
+        # ChatMock style: top level first, then fallback to nested
+        org_id = (id_claims or {}).get("organization_id") or auth_claim.get("org_id") or auth_claim.get("organization_id")
+        proj_id = (id_claims or {}).get("project_id") or auth_claim.get("project_id")
+        
+        if org_id:
+            print(f"[INFO] Using organization: {org_id}")
+        if proj_id:
+            print(f"[INFO] Using project: {proj_id}")
 
         print("[INFO] Attempting to upgrade session to persistent API key...")
+        today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
         exchange_data = {
             "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
             "client_id": client_id,
             "requested_token": "openai-api-key",
             "subject_token": id_token,
             "subject_token_type": "urn:ietf:params:oauth:token-type:id_token",
-            "audience": "https://api.openai.com/v1",
-            "scope": "model.request model.read api.model.read api.responses.write",
+            "name": f"Nexus-Nancy [auto-generated] ({today})",
         }
         
-        # Inject org/project if we found them
-        auth_claim = id_claims.get("https://api.openai.com/auth", {})
-        if isinstance(auth_claim, dict):
-            org_id = auth_claim.get("org_id") or auth_claim.get("organization_id")
-            proj_id = auth_claim.get("project_id")
-            if org_id:
-                exchange_data["organization"] = org_id
-            if proj_id:
-                exchange_data["project"] = proj_id
+        if org_id:
+            exchange_data["organization"] = org_id
+        if proj_id:
+            exchange_data["project"] = proj_id
 
         exchange_resp = requests.post(
             "https://auth.openai.com/oauth/token",
