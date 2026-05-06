@@ -226,10 +226,23 @@ def main() -> None:
 
     if command == "auth login":
         from .auth import login_codex
-        from .config import codex_session_path
+        from .config import codex_session_path, update_config
 
         cfg = load_config(workspace_root)
         login_codex(codex_session_path(cfg, workspace_root))
+        
+        updates = {
+            "auth_type": "codex",
+            "base_url": "https://api.openai.com/v1",
+        }
+        # If the model looks like a local file or is a known local-only name,
+        # switch it to a sane OpenAI default so the user isn't immediatey 404ed.
+        if cfg.model.endswith(".gguf") or "gemma" in cfg.model.lower():
+            updates["model"] = "gpt-4o"
+            print("[INFO] Local model detected; switching config to gpt-4o for OpenAI.")
+        
+        update_config(workspace_root, updates)
+        print("[OK] Config updated to use OpenAI Codex.")
         return
 
     if command == "mock-server":
