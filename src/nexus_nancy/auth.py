@@ -181,6 +181,7 @@ def login_codex(session_path: Path):
                 "requested_token": "openai-api-key",
                 "subject_token": id_token,
                 "subject_token_type": "urn:ietf:params:oauth:token-type:id_token",
+                "scope": "model.request model.read",
             },
         )
         if exchange_resp.ok:
