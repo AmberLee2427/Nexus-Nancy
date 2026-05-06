@@ -63,12 +63,24 @@ def run_doctor(cfg: Config, workspace_root: Path) -> DoctorReport:
     # Resolve key based on auth_type
     key: str | None = None
     key_source: str = "missing"
+    org_id: str | None = None
+    proj_id: str | None = None
 
     if cfg.auth_type == "codex":
         from .auth import get_codex_token
         from .config import codex_session_path
         session_file = codex_session_path(cfg, workspace_root)
         key = get_codex_token(session_file)
+        
+        if session_file.exists():
+            import json
+            try:
+                session_data = json.loads(session_file.read_text(encoding="utf-8"))
+                org_id = session_data.get("organization_id")
+                proj_id = session_data.get("project_id")
+            except Exception:
+                pass
+
         if key:
             key_source = f"codex:{session_file}"
         else:
@@ -111,6 +123,11 @@ def run_doctor(cfg: Config, workspace_root: Path) -> DoctorReport:
     base = cfg.base_url.rstrip("/")
     models_url = f"{base}/models"
     headers = {"Authorization": f"Bearer {key}"} if key else {}
+    if org_id:
+        headers["OpenAI-Organization"] = org_id
+    if proj_id:
+        headers["OpenAI-Project"] = proj_id
+
     url_ok = False
     url_info = "not checked"
     try:
