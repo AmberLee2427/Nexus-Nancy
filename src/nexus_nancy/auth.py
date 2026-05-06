@@ -1,6 +1,7 @@
-import hashlib
 import base64
+import datetime
 import http.server
+import hashlib
 import json
 import os
 import secrets
@@ -174,11 +175,21 @@ def login_codex(session_path: Path):
         auth_claim = (id_claims or {}).get("https://api.openai.com/auth", {})
         if id_claims:
             print(f"[DEBUG] ID Token Claims keys: {list(id_claims.keys())}")
-            print(f"[DEBUG] OpenAI Auth Claim: {json.dumps(auth_claim, indent=2)}")
+            # print(f"[DEBUG] OpenAI Auth Claim: {json.dumps(auth_claim, indent=2)}")
         
         # ChatMock style: top level first, then fallback to nested
-        org_id = (id_claims or {}).get("organization_id") or auth_claim.get("org_id") or auth_claim.get("organization_id")
-        proj_id = (id_claims or {}).get("project_id") or auth_claim.get("project_id")
+        org_id = (id_claims or {}).get("organization_id")
+        proj_id = (id_claims or {}).get("project_id")
+        
+        # Nancy improvement: search organizations list if top-level is missing
+        if not org_id and isinstance(auth_claim, dict):
+            orgs = auth_claim.get("organizations")
+            if isinstance(orgs, list):
+                for o in orgs:
+                    if isinstance(o, dict) and o.get("is_default"):
+                        org_id = o.get("id")
+                        print(f"[INFO] Found default organization in claim list: {org_id}")
+                        break
         
         if org_id:
             print(f"[INFO] Using organization: {org_id}")
@@ -196,6 +207,8 @@ def login_codex(session_path: Path):
             "name": f"Nexus-Nancy [auto-generated] ({today})",
         }
         
+        # Some OpenAI endpoints use 'organization' others 'org_id'. 
+        # For token-exchange, 'organization' is common.
         if org_id:
             exchange_data["organization"] = org_id
         if proj_id:
