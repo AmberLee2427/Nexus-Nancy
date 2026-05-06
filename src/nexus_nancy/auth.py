@@ -195,8 +195,13 @@ def login_codex(session_path: Path):
         if proj_id:
             tokens["project_id"] = proj_id
 
-        # Attempt upgrade (using ChatMock's minimal parameter set)
-        if org_id:
+        # ChatMock specifically skips the token exchange if org/project are
+        # not at the TOP LEVEL of the ID token claims. It does not attempt it
+        # with nested claims, because the endpoint will reject it.
+        top_level_org = (id_claims or {}).get("organization_id")
+        top_level_proj = (id_claims or {}).get("project_id")
+
+        if top_level_org and top_level_proj:
             print("[INFO] Attempting to upgrade session to persistent API key...")
             today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
             exchange_data = {
@@ -207,8 +212,6 @@ def login_codex(session_path: Path):
                 "subject_token_type": "urn:ietf:params:oauth:token-type:id_token",
                 "name": f"Nexus-Nancy [auto-generated] ({today})",
             }
-            # Note: We do NOT send organization/project in the body here,
-            # matching ChatMock's working implementation.
             exchange_resp = requests.post(
                 "https://auth.openai.com/oauth/token",
                 data=exchange_data,
@@ -220,6 +223,11 @@ def login_codex(session_path: Path):
             else:
                 print(f"[WARN] API key upgrade failed: {exchange_resp.text}")
                 print("[INFO] Falling back to standard session token.")
+        else:
+            # We silently skip the upgrade, matching ChatMock.
+            # The standard session token (access_token) is sufficient when
+            # accompanied by the correct OpenAI-Organization headers.
+            pass
     
     session_path.parent.mkdir(parents=True, exist_ok=True)
     session_path.write_text(json.dumps(tokens, indent=2), encoding="utf-8")
