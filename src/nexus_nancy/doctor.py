@@ -60,7 +60,22 @@ def run_doctor(cfg: Config, workspace_root: Path) -> DoctorReport:
     checks.append(("relay_instructions_file", relay_path.exists(), str(relay_path)))
     checks.append(("handoff_instructions_file", handoff_path.exists(), str(handoff_path)))
 
-    key, key_source = resolve_api_key(cfg, workspace_root)
+    # Resolve key based on auth_type
+    key: str | None = None
+    key_source: str = "missing"
+
+    if cfg.auth_type == "codex":
+        from .auth import get_codex_token
+        from .config import codex_session_path
+        session_file = codex_session_path(cfg, workspace_root)
+        key = get_codex_token(session_file)
+        if key:
+            key_source = f"codex:{session_file}"
+        else:
+            key, key_source = resolve_api_key(cfg, workspace_root)
+    else:
+        key, key_source = resolve_api_key(cfg, workspace_root)
+
     checks.append(("api_key", bool(key), f"source={key_source}; value={_masked_key(key)}"))
 
     allowlist = sandbox_allowlist_path(workspace_root)
@@ -102,8 +117,10 @@ def run_doctor(cfg: Config, workspace_root: Path) -> DoctorReport:
         with httpx.Client(timeout=min(cfg.timeout_seconds, 20)) as client:
             resp = client.get(models_url, headers=headers)
         # 200 indicates ready; 401/403 still proves endpoint reachability.
-        url_ok = resp.status_code in {200, 401, 403}
+        url_ok = resp.status_code in {200}
         url_info = f"{models_url} -> HTTP {resp.status_code}"
+        if resp.status_code in {401, 403}:
+            url_info += f" ({resp.text.strip()})"
     except Exception as exc:  # pragma: no cover
         url_ok = False
         # Preserve the raw exception text. Doctor is diagnostic output, not UX.
