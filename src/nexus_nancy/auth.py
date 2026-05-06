@@ -169,8 +169,11 @@ def login_codex(session_path: Path):
     id_token = tokens.get("id_token")
     id_claims = parse_jwt_claims(id_token) if id_token else None
 
-    # Optional: Exchange session for a persistent sk-... API key
-    if id_claims and id_claims.get("organization_id") and id_claims.get("project_id"):
+    # Exchange session for a persistent sk-... API key
+    if id_token:
+        if id_claims:
+            print(f"[DEBUG] ID Token Claims: {list(id_claims.keys())}")
+        
         print("[INFO] Attempting to upgrade session to persistent API key...")
         exchange_resp = requests.post(
             "https://auth.openai.com/oauth/token",
@@ -181,7 +184,7 @@ def login_codex(session_path: Path):
                 "requested_token_type": "urn:openai:params:oauth:token-type:api-key",
                 "subject_token": id_token,
                 "subject_token_type": "urn:ietf:params:oauth:token-type:id_token",
-                "audience": "https://api.openai.com/v1",
+                "audience": "https://api.openai.com",
                 "scope": "model.request model.read api.model.read api.responses.write",
             },
         )
@@ -191,6 +194,8 @@ def login_codex(session_path: Path):
             print("[OK] Persistent API key obtained.")
         else:
             print(f"[WARN] API key upgrade failed: {exchange_resp.text}")
+    else:
+        print("[WARN] No id_token found. Skipping API key upgrade.")
 
     session_path.parent.mkdir(parents=True, exist_ok=True)
     session_path.write_text(json.dumps(tokens, indent=2), encoding="utf-8")
