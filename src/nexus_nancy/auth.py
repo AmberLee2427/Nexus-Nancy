@@ -181,7 +181,6 @@ def login_codex(session_path: Path):
                 "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
                 "client_id": client_id,
                 "requested_token": "openai-api-key",
-                "requested_token_type": "urn:openai:params:oauth:token-type:api-key",
                 "subject_token": id_token,
                 "subject_token_type": "urn:ietf:params:oauth:token-type:id_token",
                 "audience": "https://api.openai.com",
