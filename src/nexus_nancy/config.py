@@ -78,7 +78,7 @@ def bootstrap_local_files(workspace_root: Path) -> None:
     a_dir.mkdir(parents=True, exist_ok=True)
 
     cfg = config_path(workspace_root)
-    if not cfg.exists():
+    if not cfg.exists() or cfg.stat().st_size == 0:
         cfg.write_text(default_config_yaml(), encoding="utf-8")
 
     # Prompt templates ship inside the installed package and are copied into the

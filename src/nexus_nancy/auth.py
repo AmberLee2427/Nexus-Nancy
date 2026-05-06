@@ -63,19 +63,18 @@ def login_codex(session_path: Path):
     state = secrets.token_hex(32)
     code_verifier, code_challenge = generate_pkce()
 
-    auth_url = "https://auth.openai.com/oauth/authorize?" + urlencode(
-        {
-            "client_id": client_id,
-            "response_type": "code",
-            "redirect_uri": redirect_uri,
-            "scope": "openid profile email offline_access",
-            "state": state,
-            "code_challenge": code_challenge,
-            "code_challenge_method": "S256",
-            "codex_cli_simplified_flow": "true",
-            "id_token_add_organizations": "true",
-        }
-    )
+    params = {
+        "client_id": client_id,
+        "response_type": "code",
+        "redirect_uri": redirect_uri,
+        "scope": "openid profile email offline_access model.request model.read",
+        "state": state,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
+        "codex_cli_simplified_flow": "true",
+        "id_token_add_organizations": "true",
+    }
+    auth_url = "https://auth.openai.com/oauth/authorize?" + urlencode(params)
 
     print("\n" + "=" * 60)
     print(" OPENAI CODEX LOGIN (CHATGPT PLUS)".center(60))
