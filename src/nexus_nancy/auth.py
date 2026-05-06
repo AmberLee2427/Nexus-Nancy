@@ -33,7 +33,8 @@ class OAuthCallbackHandler(http.server.BaseHTTPRequestHandler):
 
 
 def generate_pkce():
-    code_verifier = secrets.token_urlsafe(64)
+    # Use hex to match ChatMock's verifier style and length (128 chars)
+    code_verifier = secrets.token_hex(64)
     digest = hashlib.sha256(code_verifier.encode()).digest()
     code_challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
     return code_verifier, code_challenge
@@ -59,22 +60,19 @@ def login_codex(session_path: Path):
     port = 1455
     redirect_uri = f"http://localhost:{port}/auth/callback"
 
-    state = secrets.token_urlsafe(16)
+    state = secrets.token_hex(32)
     code_verifier, code_challenge = generate_pkce()
 
-    auth_url = "https://auth.openai.com/authorize?" + urlencode(
+    auth_url = "https://auth.openai.com/oauth/authorize?" + urlencode(
         {
             "client_id": client_id,
-            "audience": "https://api.openai.com/v1",
             "response_type": "code",
             "redirect_uri": redirect_uri,
             "scope": "openid profile email offline_access",
             "state": state,
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
-            "prompt": "login",
             "codex_cli_simplified_flow": "true",
-            "originator": "codex_cli_rs",
             "id_token_add_organizations": "true",
         }
     )
@@ -143,9 +141,10 @@ def login_codex(session_path: Path):
 
     print("\n[OK] Identity verified. Exchanging code for tokens...")
 
+    # Use data= for application/x-www-form-urlencoded, required by OpenAI
     resp = requests.post(
         "https://auth.openai.com/oauth/token",
-        json={
+        data={
             "client_id": client_id,
             "code": server.auth_code,
             "grant_type": "authorization_code",
@@ -166,7 +165,7 @@ def login_codex(session_path: Path):
         print("[INFO] Attempting to upgrade session to persistent API key...")
         exchange_resp = requests.post(
             "https://auth.openai.com/oauth/token",
-            json={
+            data={
                 "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
                 "client_id": client_id,
                 "requested_token": "openai-api-key",
