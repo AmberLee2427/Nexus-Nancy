@@ -197,7 +197,8 @@ def login_codex(session_path: Path):
             print(f"[INFO] Using project: {proj_id}")
 
         print("[INFO] Attempting to upgrade session to persistent API key...")
-        today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+        # OpenAI token-exchange parameters are sensitive.
+        # We try to use the extracted organization_id if we found one.
         exchange_data = {
             "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
             "client_id": client_id,
@@ -207,12 +208,10 @@ def login_codex(session_path: Path):
             "name": f"Nexus-Nancy [auto-generated] ({today})",
         }
         
-        # Some OpenAI endpoints use 'organization' others 'org_id'. 
-        # For token-exchange, 'organization' is common.
         if org_id:
-            exchange_data["organization"] = org_id
+            exchange_data["organization_id"] = org_id
         if proj_id:
-            exchange_data["project"] = proj_id
+            exchange_data["project_id"] = proj_id
 
         exchange_resp = requests.post(
             "https://auth.openai.com/oauth/token",
@@ -224,8 +223,13 @@ def login_codex(session_path: Path):
             print("[OK] Persistent API key obtained.")
         else:
             print(f"[WARN] API key upgrade failed: {exchange_resp.text}")
-    else:
-        print("[WARN] No id_token found. Skipping API key upgrade.")
+            print("[INFO] Falling back to standard session token.")
+
+    # Save org/project info for the LLM client to use in headers
+    if org_id:
+        tokens["organization_id"] = org_id
+    if proj_id:
+        tokens["project_id"] = proj_id
 
     session_path.parent.mkdir(parents=True, exist_ok=True)
     session_path.write_text(json.dumps(tokens, indent=2), encoding="utf-8")
