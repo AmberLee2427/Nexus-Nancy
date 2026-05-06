@@ -67,7 +67,7 @@ def login_codex(session_path: Path):
         "client_id": client_id,
         "response_type": "code",
         "redirect_uri": redirect_uri,
-        "scope": "openid profile email offline_access model.request model.read",
+        "scope": "openid profile email offline_access",
         "state": state,
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
@@ -178,15 +178,18 @@ def login_codex(session_path: Path):
                 "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
                 "client_id": client_id,
                 "requested_token": "openai-api-key",
+                "requested_token_type": "urn:openai:params:oauth:token-type:api-key",
                 "subject_token": id_token,
                 "subject_token_type": "urn:ietf:params:oauth:token-type:id_token",
-                "scope": "model.request model.read",
+                "audience": "https://api.openai.com/v1",
             },
         )
         if exchange_resp.ok:
             exchange_tokens = exchange_resp.json()
             tokens["api_key"] = exchange_tokens.get("access_token")
             print("[OK] Persistent API key obtained.")
+        else:
+            print(f"[WARN] API key upgrade failed: {exchange_resp.text}")
 
     session_path.parent.mkdir(parents=True, exist_ok=True)
     session_path.write_text(json.dumps(tokens, indent=2), encoding="utf-8")
