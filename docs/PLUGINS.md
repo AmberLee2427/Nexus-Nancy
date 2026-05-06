@@ -80,7 +80,7 @@ For more complex extensions that need external dependencies or run as background
 
 ```bash
 pip install cookiecutter
-cookiecutter https://github.com/AmberLee2427/Nexus-Nancy.git --directory extras/templates/plugin
+cookiecutter https://github.com/AmberLee2427/nancy-plugin-template
 ```
 
 This creates a ready-to-go plugin repo with:

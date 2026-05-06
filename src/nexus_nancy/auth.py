@@ -1,3 +1,5 @@
+import hashlib
+import base64
 import http.server
 import json
 import os
@@ -22,12 +24,31 @@ class OAuthCallbackHandler(http.server.BaseHTTPRequestHandler):
 
         self.wfile.write(
             b"<html><body><h1>Login Successful</h1>"
-            b"<p>You can close this window now.</p></body></html>"
+            b"<p>You can close this window now and return to the terminal.</p></body></html>"
         )
 
     def log_message(self, format, *args):
         # Silence server logs
         return
+
+
+def generate_pkce():
+    code_verifier = secrets.token_urlsafe(64)
+    digest = hashlib.sha256(code_verifier.encode()).digest()
+    code_challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
+    return code_verifier, code_challenge
+
+
+def parse_jwt_claims(token: str):
+    if not token or token.count(".") != 2:
+        return None
+    try:
+        _, payload, _ = token.split(".")
+        padded = payload + "=" * (-len(payload) % 4)
+        data = base64.urlsafe_b64decode(padded.encode())
+        return json.loads(data.decode())
+    except Exception:
+        return None
 
 
 def login_codex(session_path: Path):
@@ -39,6 +60,8 @@ def login_codex(session_path: Path):
     redirect_uri = f"http://localhost:{port}/callback"
 
     state = secrets.token_urlsafe(16)
+    code_verifier, code_challenge = generate_pkce()
+
     auth_url = "https://auth.openai.com/authorize?" + urlencode(
         {
             "client_id": client_id,
@@ -47,6 +70,10 @@ def login_codex(session_path: Path):
             "redirect_uri": redirect_uri,
             "scope": "openid profile email offline_access",
             "state": state,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
+            "codex_cli_simplified_flow": "true",
+            "id_token_add_organizations": "true",
         }
     )
 
@@ -121,6 +148,7 @@ def login_codex(session_path: Path):
             "code": server.auth_code,
             "grant_type": "authorization_code",
             "redirect_uri": redirect_uri,
+            "code_verifier": code_verifier,
         },
     )
 
@@ -128,6 +156,27 @@ def login_codex(session_path: Path):
         raise RuntimeError(f"Token exchange failed: {resp.text}")
 
     tokens = resp.json()
+    id_token = tokens.get("id_token")
+    id_claims = parse_jwt_claims(id_token) if id_token else None
+
+    # Optional: Exchange session for a persistent sk-... API key
+    if id_claims and id_claims.get("organization_id") and id_claims.get("project_id"):
+        print("[INFO] Attempting to upgrade session to persistent API key...")
+        exchange_resp = requests.post(
+            "https://auth.openai.com/oauth/token",
+            json={
+                "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+                "client_id": client_id,
+                "requested_token": "openai-api-key",
+                "subject_token": id_token,
+                "subject_token_type": "urn:ietf:params:oauth:token-type:id_token",
+            },
+        )
+        if exchange_resp.ok:
+            exchange_tokens = exchange_resp.json()
+            tokens["api_key"] = exchange_tokens.get("access_token")
+            print("[OK] Persistent API key obtained.")
+
     session_path.parent.mkdir(parents=True, exist_ok=True)
     session_path.write_text(json.dumps(tokens, indent=2), encoding="utf-8")
     session_path.chmod(0o600)
@@ -141,6 +190,10 @@ def get_codex_token(session_path: Path):
         return None
 
     tokens = json.loads(session_path.read_text(encoding="utf-8"))
+
+    # Prefer the persistent API key if we have one
+    if tokens.get("api_key"):
+        return tokens.get("api_key")
 
     # Simplified token refresh logic
     # In a full impl, check 'expires_in' and use 'refresh_token'.
