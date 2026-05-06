@@ -1,3 +1,6 @@
 [submodule "extras/templates/plugin"]
 	path = extras/templates/plugin
 	url = https://github.com/AmberLee2427/nancy-plugin-template.git
+[submodule "extras/plugins/nancy-mcp-adapter"]
+	path = extras/plugins/nancy-mcp-adapter
+	url = https://github.com/AmberLee2427/nancy-mcp-adapter.git
