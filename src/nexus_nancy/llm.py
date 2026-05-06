@@ -17,6 +17,7 @@ class LLMClient:
         self.workspace_root = workspace_root
         self.organization_id = None
         self.project_id = None
+        self.account_id = None
 
         if cfg.auth_type == "codex":
             from .auth import get_codex_token
@@ -30,6 +31,7 @@ class LLMClient:
                     session_data = json.loads(session_file.read_text(encoding="utf-8"))
                     self.organization_id = session_data.get("organization_id")
                     self.project_id = session_data.get("project_id")
+                    self.account_id = session_data.get("chatgpt_account_id")
                 except Exception:
                     pass
 
@@ -178,6 +180,8 @@ class LLMClient:
             headers["OpenAI-Organization"] = self.organization_id
         if self.project_id:
             headers["OpenAI-Project"] = self.project_id
+        if self.account_id:
+            headers["OpenAI-Account"] = self.account_id
 
         request_url = f"{self.base_url}/chat/completions"
         with httpx.Client(timeout=self.cfg.timeout_seconds) as client:

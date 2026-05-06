@@ -65,6 +65,7 @@ def run_doctor(cfg: Config, workspace_root: Path) -> DoctorReport:
     key_source: str = "missing"
     org_id: str | None = None
     proj_id: str | None = None
+    account_id: str | None = None
 
     if cfg.auth_type == "codex":
         from .auth import get_codex_token
@@ -78,6 +79,7 @@ def run_doctor(cfg: Config, workspace_root: Path) -> DoctorReport:
                 session_data = json.loads(session_file.read_text(encoding="utf-8"))
                 org_id = session_data.get("organization_id")
                 proj_id = session_data.get("project_id")
+                account_id = session_data.get("chatgpt_account_id")
             except Exception:
                 pass
 
@@ -127,6 +129,8 @@ def run_doctor(cfg: Config, workspace_root: Path) -> DoctorReport:
         headers["OpenAI-Organization"] = org_id
     if proj_id:
         headers["OpenAI-Project"] = proj_id
+    if account_id:
+        headers["OpenAI-Account"] = account_id
 
     url_ok = False
     url_info = "not checked"

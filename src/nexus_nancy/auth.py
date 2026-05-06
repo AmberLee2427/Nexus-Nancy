@@ -173,65 +173,49 @@ def login_codex(session_path: Path):
     # Exchange session for a persistent sk-... API key
     if id_token:
         auth_claim = (id_claims or {}).get("https://api.openai.com/auth", {})
-        if id_claims:
-            print(f"[DEBUG] ID Token Claims keys: {list(id_claims.keys())}")
-            # print(f"[DEBUG] OpenAI Auth Claim: {json.dumps(auth_claim, indent=2)}")
         
-        # ChatMock style: top level first, then fallback to nested
+        # Extract account/org/project info
+        account_id = auth_claim.get("chatgpt_account_id")
         org_id = (id_claims or {}).get("organization_id")
         proj_id = (id_claims or {}).get("project_id")
         
-        # Nancy improvement: search organizations list if top-level is missing
         if not org_id and isinstance(auth_claim, dict):
             orgs = auth_claim.get("organizations")
             if isinstance(orgs, list):
                 for o in orgs:
                     if isinstance(o, dict) and o.get("is_default"):
                         org_id = o.get("id")
-                        print(f"[INFO] Found default organization in claim list: {org_id}")
                         break
         
+        # Save info for the LLM client to use in headers
+        if account_id:
+            tokens["chatgpt_account_id"] = account_id
         if org_id:
-            print(f"[INFO] Using organization: {org_id}")
+            tokens["organization_id"] = org_id
         if proj_id:
-            print(f"[INFO] Using project: {proj_id}")
+            tokens["project_id"] = proj_id
 
-        print("[INFO] Attempting to upgrade session to persistent API key...")
-        today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
-        # OpenAI token-exchange parameters are sensitive.
-        # We try to use the extracted organization_id if we found one.
-        exchange_data = {
-            "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
-            "client_id": client_id,
-            "requested_token": "openai-api-key",
-            "subject_token": id_token,
-            "subject_token_type": "urn:ietf:params:oauth:token-type:id_token",
-            "name": f"Nexus-Nancy [auto-generated] ({today})",
-        }
-        
-        if org_id:
-            exchange_data["organization_id"] = org_id
-        if proj_id:
-            exchange_data["project_id"] = proj_id
-
-        exchange_resp = requests.post(
-            "https://auth.openai.com/oauth/token",
-            data=exchange_data,
-        )
-        if exchange_resp.ok:
-            exchange_tokens = exchange_resp.json()
-            tokens["api_key"] = exchange_tokens.get("access_token")
-            print("[OK] Persistent API key obtained.")
-        else:
-            print(f"[WARN] API key upgrade failed: {exchange_resp.text}")
-            print("[INFO] Falling back to standard session token.")
-
-    # Save org/project info for the LLM client to use in headers
-    if org_id:
-        tokens["organization_id"] = org_id
-    if proj_id:
-        tokens["project_id"] = proj_id
-
+        # Attempt upgrade (only if we have the expected claims, to avoid noisy errors)
+        if (id_claims or {}).get("organization_id"):
+            print("[INFO] Attempting to upgrade session to persistent API key...")
+            today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+            exchange_data = {
+                "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+                "client_id": client_id,
+                "requested_token": "openai-api-key",
+                "subject_token": id_token,
+                "subject_token_type": "urn:ietf:params:oauth:token-type:id_token",
+                "name": f"Nexus-Nancy [auto-generated] ({today})",
+            }
+            exchange_resp = requests.post(
+                "https://auth.openai.com/oauth/token",
+                data=exchange_data,
+            )
+            if exchange_resp.ok:
+                exchange_tokens = exchange_resp.json()
+                tokens["api_key"] = exchange_tokens.get("access_token")
+                print("[OK] Persistent API key obtained.")
+    
     session_path.parent.mkdir(parents=True, exist_ok=True)
     session_path.write_text(json.dumps(tokens, indent=2), encoding="utf-8")
     session_path.chmod(0o600)
