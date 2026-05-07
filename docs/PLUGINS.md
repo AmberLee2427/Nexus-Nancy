@@ -9,16 +9,17 @@ Nexus-Nancy is built to be extensible. There are two ways to add capabilities: *
 | **Extension** | Umbrella term for any capability added to Nancy |
 | **Tool** | Simple, low-dependency script triggered by model or user |
 | **Plugin** | Pip-installable package with optional dependencies, can be passive/background |
+| **Provider** | Plugin that implements a custom LLM backend (e.g., Gemini, Codex) |
 
 ## Quick Reference
 
-| | Tool | Plugin |
-|---|---|---|
-| **Distribution** | Single `.py` file in `.agents/tools/` | Pip package |
-| **Dependencies** | None (besides nexus-nancy) | Any pip package |
-| **Activation** | Triggered (by model or slash command) | Can be passive/background |
-| **Dev cost** | Low (copy a file) | Higher (pip package, entry points) |
-| **Best for** | Simple commands, cluster environments | Heavy deps, background services |
+| | Tool | Plugin | Provider |
+|---|---|---|---|
+| **Distribution** | Single `.py` file in `.agents/tools/` | Pip package | Pip package |
+| **Dependencies** | None (besides nexus-nancy) | Any pip package | Any pip package |
+| **Activation** | Triggered | Passive/Background | Via `nnancy.yaml` config |
+| **Dev cost** | Low | Medium | High |
+| **Best for** | Simple commands | Background services | Custom API backends |
 
 **When to use which:**
 - **Tool**: You need something simple with no dependencies, quick to prototype
@@ -115,6 +116,28 @@ class MemoryIndexer:
 
 # Nancy can call this periodically or it can hook into message processing
 ```
+
+### LLM Providers
+
+Providers allow Nancy to speak to non-standard backends (like the unofficial ChatGPT Codex API, or Google Gemini) while keeping the core logic clean.
+
+1. Implement the `LLMProvider` interface (see `nexus_nancy.provider`).
+2. Export `register_providers()` from your plugin:
+   ```python
+   def register_providers():
+       return {
+           "my_custom_provider": MyProviderClass
+       }
+   ```
+3. Add the provider entry point to `pyproject.toml`:
+   ```toml
+   [project.entry-points."nexus_nancy.providers"]
+   my_plugin = "my_package.plugin"
+   ```
+4. Switch to your provider in `nnancy.yaml`:
+   ```yaml
+   provider: my_custom_provider
+   ```
 
 ## How Nancy Discovers Extensions
 
