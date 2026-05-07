@@ -41,7 +41,6 @@ Commands:
     nnancy instructions    Open the system prompt instructions file in your editor.
     nnancy config          Open the nnancy.yaml configuration file in your editor.
     nnancy secrets         Open the secrets file (API key) in your editor.
-    nnancy auth login      Log in to ChatGPT Plus via OAuth (Codex mode).
 
 Interactive Chat Commands (in TUI):
     /new                   Start a fresh session in this process
@@ -130,6 +129,7 @@ def _config_with_mock_server(cfg: Config, port: int) -> Config:
         reasoning_channel=cfg.reasoning_channel,
         parallel_tool_calls=cfg.parallel_tool_calls,
         capability_probe=cfg.capability_probe,
+        provider="native_openai",
     )
 
 
@@ -151,10 +151,7 @@ def _parse_args(
     i = 0
     while i < len(args):
         arg = args[i]
-        if arg == "auth" and i + 1 < len(args) and args[i + 1] == "login":
-            command = "auth login"
-            i += 2
-        elif arg in {"instructions", "config", "secrets", "doctor"}:
+        if arg in {"instructions", "config", "secrets", "doctor"}:
             command = arg
             i += 1
         elif arg in {"-h", "--help"}:
@@ -222,27 +219,6 @@ def main() -> None:
 
     if command == "secrets":
         open_secrets_in_editor(workspace_root)
-        return
-
-    if command == "auth login":
-        from .auth import login_codex
-        from .config import codex_session_path, update_config
-
-        cfg = load_config(workspace_root)
-        login_codex(codex_session_path(cfg, workspace_root))
-        
-        updates = {
-            "auth_type": "codex",
-            # We explicitly do NOT set base_url to api.openai.com/v1 here
-            # because Codex tokens only work against backend-api endpoints
-            # or a local bridge server like ChatMock (e.g. http://localhost:8000/v1).
-        }
-        
-        update_config(workspace_root, updates)
-        print("[OK] Config updated to use OpenAI Codex.")
-        print("[!] Note: Codex tokens CANNOT be used directly against api.openai.com/v1.")
-        print("    You must run a local bridge server (like ChatMock) and set your")
-        print("    base_url to point to it (e.g. http://127.0.0.1:8000/v1)")
         return
 
     if command == "mock-server":

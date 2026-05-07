@@ -17,7 +17,7 @@ from .config import (
     sandbox_allowlist_path,
 )
 from .execution import select_execution_strategy
-from .llm import LLMClient
+from .provider import get_provider
 from .tools import TOOL_SPECS
 
 
@@ -60,35 +60,15 @@ def run_doctor(cfg: Config, workspace_root: Path) -> DoctorReport:
     checks.append(("relay_instructions_file", relay_path.exists(), str(relay_path)))
     checks.append(("handoff_instructions_file", handoff_path.exists(), str(handoff_path)))
 
-    # Resolve key based on auth_type
-    key: str | None = None
-    key_source: str = "missing"
-    org_id: str | None = None
-    proj_id: str | None = None
-    account_id: str | None = None
-
-    if cfg.auth_type == "codex":
-        from .auth import get_codex_token
-        from .config import codex_session_path
-        session_file = codex_session_path(cfg, workspace_root)
-        key = get_codex_token(session_file)
-        
-        if session_file.exists():
-            import json
-            try:
-                session_data = json.loads(session_file.read_text(encoding="utf-8"))
-                org_id = session_data.get("organization_id")
-                proj_id = session_data.get("project_id")
-                account_id = session_data.get("chatgpt_account_id")
-            except Exception:
-                pass
-
-        if key:
-            key_source = f"codex:{session_file}"
-        else:
-            key, key_source = resolve_api_key(cfg, workspace_root)
-    else:
-        key, key_source = resolve_api_key(cfg, workspace_root)
+    # Use provider for API key and status resolution
+    try:
+        provider = get_provider(cfg, workspace_root)
+        key = getattr(provider, "api_key", None)
+        key_source = getattr(provider, "api_key_source", "provider-internal")
+    except Exception as exc:
+        provider = None
+        key = None
+        key_source = f"error: {exc}"
 
     checks.append(("api_key", bool(key), f"source={key_source}; value={_masked_key(key)}"))
 
@@ -124,13 +104,15 @@ def run_doctor(cfg: Config, workspace_root: Path) -> DoctorReport:
     # URL health check: /models typically exists on OpenAI-compatible servers.
     base = cfg.base_url.rstrip("/")
     models_url = f"{base}/models"
+    
+    # Try to get headers from provider if available
     headers = {"Authorization": f"Bearer {key}"} if key else {}
-    if org_id:
-        headers["OpenAI-Organization"] = org_id
-    if proj_id:
-        headers["OpenAI-Project"] = proj_id
-    if account_id:
-        headers["OpenAI-Account"] = account_id
+    if provider and hasattr(provider, "organization_id") and provider.organization_id:
+        headers["OpenAI-Organization"] = provider.organization_id
+    if provider and hasattr(provider, "project_id") and provider.project_id:
+        headers["OpenAI-Project"] = provider.project_id
+    if provider and hasattr(provider, "account_id") and provider.account_id:
+        headers["OpenAI-Account"] = provider.account_id
 
     url_ok = False
     url_info = "not checked"
@@ -151,27 +133,33 @@ def run_doctor(cfg: Config, workspace_root: Path) -> DoctorReport:
     # Preflight payload validation check (no network call).
     preflight_ok = False
     preflight_info = "not checked"
-    try:
-        client = LLMClient(cfg, workspace_root)
-        test_messages = [
-            {"role": "system", "content": "doctor preflight system"},
-            {"role": "user", "content": "doctor preflight user"},
-        ]
-        client._validate_request(test_messages, TOOL_SPECS)
-        preflight_ok = True
-        preflight_info = (
-            "payload validator passed "
-            f"(tools={len(TOOL_SPECS)}, max_preflight_tokens={cfg.max_preflight_tokens})"
-        )
-    except Exception as exc:  # pragma: no cover
-        preflight_ok = False
-        # Preflight failures should surface the exact message that blocked the
-        # request so users can act on it directly.
-        preflight_info = str(exc)
+    if provider:
+        try:
+            test_messages = [
+                {"role": "system", "content": "doctor preflight system"},
+                {"role": "user", "content": "doctor preflight user"},
+            ]
+            # _validate_request might be provider-specific, but standard providers have it
+            if hasattr(provider, "_validate_request"):
+                provider._validate_request(test_messages, TOOL_SPECS)
+                preflight_ok = True
+                preflight_info = (
+                    "payload validator passed "
+                    f"(tools={len(TOOL_SPECS)}, max_preflight_tokens={cfg.max_preflight_tokens})"
+                )
+            else:
+                preflight_ok = True
+                preflight_info = "skipping preflight (provider does not support _validate_request)"
+        except Exception as exc:  # pragma: no cover
+            preflight_ok = False
+            # Preflight failures should surface the exact message that blocked the
+            # request so users can act on it directly.
+            preflight_info = str(exc)
     checks.append(("request_preflight", preflight_ok, preflight_info))
 
     lines.append("Nexus-Nancy doctor")
     lines.append("")
+    lines.append(f"provider: {cfg.provider}")
     lines.append(f"model: {cfg.model}")
     lines.append(f"base_url: {cfg.base_url}")
     lines.append(f"execution_strategy: {cfg.execution_strategy}")

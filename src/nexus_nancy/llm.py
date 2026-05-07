@@ -7,42 +7,17 @@ from urllib.parse import urlparse
 
 import httpx
 
-from .config import Config, codex_session_path, resolve_api_key
+from .config import Config, resolve_api_key
+from .provider import LLMProvider
 from .token_count import estimate_context_tokens
 
 
-class LLMClient:
+class NativeOpenAIProvider(LLMProvider):
     def __init__(self, cfg: Config, workspace_root: Path):
         self.cfg = cfg
         self.workspace_root = workspace_root
-        self.organization_id = None
-        self.project_id = None
-        self.account_id = None
-
-        if cfg.auth_type == "codex":
-            from .auth import get_codex_token
-
-            session_file = codex_session_path(cfg, workspace_root)
-            token = get_codex_token(session_file)
-            
-            # Load org/project from session file if possible
-            if session_file.exists():
-                try:
-                    session_data = json.loads(session_file.read_text(encoding="utf-8"))
-                    self.organization_id = session_data.get("organization_id")
-                    self.project_id = session_data.get("project_id")
-                    self.account_id = session_data.get("chatgpt_account_id")
-                except Exception:
-                    pass
-
-            if token:
-                self.api_key = token
-                self.api_key_source = f"codex:{session_file}"
-            else:
-                self.api_key, self.api_key_source = resolve_api_key(cfg, workspace_root)
-        else:
-            self.api_key, self.api_key_source = resolve_api_key(cfg, workspace_root)
-
+        
+        self.api_key, self.api_key_source = resolve_api_key(cfg, workspace_root)
         self.base_url = cfg.base_url.rstrip("/")
         self._validate_client_config()
 
@@ -176,12 +151,6 @@ class LLMClient:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-        if self.organization_id:
-            headers["OpenAI-Organization"] = self.organization_id
-        if self.project_id:
-            headers["OpenAI-Project"] = self.project_id
-        if self.account_id:
-            headers["OpenAI-Account"] = self.account_id
 
         request_url = f"{self.base_url}/chat/completions"
         with httpx.Client(timeout=self.cfg.timeout_seconds) as client:

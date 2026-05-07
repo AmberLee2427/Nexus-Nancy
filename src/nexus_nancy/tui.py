@@ -16,6 +16,7 @@ from textual.widgets import Button, Collapsible, Footer, Header, Input, Label, S
 
 from .app import PromptResult, ToolApprovalDecision, ToolApprovalRequest, run_prompt
 from .config import config_path, open_config_in_editor, replace_api_key
+from .provider import LLMProvider
 from .sandbox import SandboxPolicy
 from .session import SessionState
 from .token_count import estimate_context_tokens
@@ -226,7 +227,7 @@ class NancyTUI(App[None]):
     }
     """
 
-    def __init__(self, state: SessionState, llm_client, sandbox: SandboxPolicy):
+    def __init__(self, state: SessionState, llm_client: LLMProvider, sandbox: SandboxPolicy):
         super().__init__()
         self.state = state
         self.llm = llm_client

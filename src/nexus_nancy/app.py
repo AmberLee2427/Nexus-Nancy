@@ -20,7 +20,7 @@ from .config import (
 )
 from .context import build_native_openai_context, build_universal_context
 from .execution import STRATEGY_NATIVE_OPENAI, STRATEGY_UNIVERSAL, select_execution_strategy
-from .llm import LLMClient
+from .provider import LLMProvider, get_provider
 from .sandbox import SandboxPolicy
 from .session import SessionState
 from .tools import REGISTRY, TOOL_SPECS, execute_tool, initialize_tools, validate_tool_arguments
@@ -355,7 +355,7 @@ def _raw_function_call_from_text(content: str) -> dict[str, Any] | None:
 
 def _assistant_turn_universal(
     state: SessionState,
-    llm: LLMClient,
+    llm: LLMProvider,
     sandbox: SandboxPolicy,
     tool_approval: ToolApprovalHandler | None = None,
 ) -> PromptResult:
@@ -444,7 +444,7 @@ def _assistant_turn_universal(
 
 def _assistant_turn_native_openai(
     state: SessionState,
-    llm: LLMClient,
+    llm: LLMProvider,
     sandbox: SandboxPolicy,
     tool_approval: ToolApprovalHandler | None = None,
 ) -> PromptResult:
@@ -519,7 +519,7 @@ def _assistant_turn_native_openai(
 
 def _assistant_turn_for_strategy(
     state: SessionState,
-    llm: LLMClient,
+    llm: LLMProvider,
     sandbox: SandboxPolicy,
     tool_approval: ToolApprovalHandler | None = None,
 ) -> PromptResult:
@@ -530,7 +530,7 @@ def _assistant_turn_for_strategy(
 
 def run_prompt(
     state: SessionState,
-    llm: LLMClient,
+    llm: LLMProvider,
     sandbox: SandboxPolicy,
     user_text: str,
     *,
@@ -616,7 +616,7 @@ def run_prompt(
             model=summary_model,
             **{key: value for key, value in state.cfg.__dict__.items() if key != "model"},
         )
-        summary_llm = LLMClient(summary_cfg, state.workspace_root)
+        summary_llm = get_provider(summary_cfg, state.workspace_root)
         summary_messages = [
             {"role": "system", "content": handoff_prompt},
             {
@@ -693,7 +693,7 @@ def run_prompt(
     return answer
 
 
-def build_state(cfg: Config, yolo: bool) -> tuple[SessionState, LLMClient, SandboxPolicy]:
+def build_state(cfg: Config, yolo: bool) -> tuple[SessionState, LLMProvider, SandboxPolicy]:
     workspace_root = Path.cwd().resolve()
     initialize_tools(workspace_root)
     logs_dir = workspace_root / "logs"
@@ -706,7 +706,7 @@ def build_state(cfg: Config, yolo: bool) -> tuple[SessionState, LLMClient, Sandb
     state = SessionState.create(cfg, instructions, workspace_root, logs_dir)
     state.execution_strategy = selection.selected
     state.capabilities = selection.capabilities
-    llm = LLMClient(cfg, workspace_root)
+    llm = get_provider(cfg, workspace_root)
     allowlist = load_sandbox_allowlist(workspace_root)
     sandbox_root = Path(cfg.sandbox_root).expanduser()
     if not sandbox_root.is_absolute():

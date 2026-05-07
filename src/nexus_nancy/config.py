@@ -25,8 +25,7 @@ class Config:
     reasoning_channel: bool | str = "auto"
     parallel_tool_calls: bool | str = "auto"
     capability_probe: bool = True
-    auth_type: str = "api_key"  # "api_key" or "codex"
-    codex_session_file: str = ".agents/secrets/codex.json"
+    provider: str = "native_openai"
 
 
 def agents_dir(workspace_root: Path) -> Path:
@@ -68,8 +67,7 @@ native_tools: auto
 reasoning_channel: auto
 parallel_tool_calls: auto
 capability_probe: true
-auth_type: api_key
-codex_session_file: .agents/secrets/codex.json
+provider: native_openai
 """
 
 
@@ -176,7 +174,6 @@ def _resolve_config_paths(cfg: Config, workspace_root: Path) -> None:
     # Normalize path-like config values at load time so every downstream caller
     # sees real absolute paths instead of ambiguous workspace-relative shorthands.
     cfg.api_key_file = _resolve_config_path_value(workspace_root, str(cfg.api_key_file))
-    cfg.codex_session_file = _resolve_config_path_value(workspace_root, str(cfg.codex_session_file))
     cfg.sandbox_root = _resolve_config_path_value(workspace_root, str(cfg.sandbox_root))
 
 
@@ -343,10 +340,6 @@ def _unquote(value: str) -> str:
 
 def api_key_path(cfg: Config, workspace_root: Path) -> Path:
     return (workspace_root / cfg.api_key_file).resolve()
-
-
-def codex_session_path(cfg: Config, workspace_root: Path) -> Path:
-    return (workspace_root / cfg.codex_session_file).resolve()
 
 
 def replace_api_key(cfg: Config, workspace_root: Path, new_key: str) -> Path:
