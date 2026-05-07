@@ -73,7 +73,7 @@ def login_codex(session_path: Path):
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
         "codex_cli_simplified_flow": "true",
-        "id_token_add_organizations": "true",
+        "id_token_add_organization": "true",
     }
     auth_url = "https://auth.openai.com/oauth/authorize?" + urlencode(params)
 
