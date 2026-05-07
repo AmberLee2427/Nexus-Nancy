@@ -13,7 +13,6 @@ from .config import (
     handoff_instructions_path,
     instructions_path,
     relay_instructions_path,
-    resolve_api_key,
     sandbox_allowlist_path,
 )
 from .execution import select_execution_strategy
@@ -104,7 +103,7 @@ def run_doctor(cfg: Config, workspace_root: Path) -> DoctorReport:
     # URL health check: /models typically exists on OpenAI-compatible servers.
     base = cfg.base_url.rstrip("/")
     models_url = f"{base}/models"
-    
+
     # Try to get headers from provider if available
     headers = {"Authorization": f"Bearer {key}"} if key else {}
     if provider and hasattr(provider, "organization_id") and provider.organization_id:

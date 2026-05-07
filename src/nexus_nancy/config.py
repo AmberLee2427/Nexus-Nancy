@@ -7,6 +7,7 @@ import sys
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
+from typing import Any
 
 
 @dataclass
@@ -226,22 +227,22 @@ def update_config(workspace_root: Path, updates: dict[str, Any]) -> None:
     path = config_path(workspace_root)
     if not path.exists():
         path.write_text(default_config_yaml(), encoding="utf-8")
-    
+
     text = path.read_text(encoding="utf-8")
     lines = text.splitlines()
-    
+
     new_lines = []
     applied_keys = set()
-    
+
     for line in lines:
         stripped = line.strip()
         if not stripped or stripped.startswith("#") or ":" not in stripped:
             new_lines.append(line)
             continue
-            
+
         before, _, _ = line.partition(":")
         key = before.strip()
-        
+
         if key in updates:
             indent = before[: len(before) - len(before.lstrip())]
             val = updates[key]
@@ -253,7 +254,7 @@ def update_config(workspace_root: Path, updates: dict[str, Any]) -> None:
             applied_keys.add(key)
         else:
             new_lines.append(line)
-            
+
     # Add any keys that weren't already in the file
     for key, val in updates.items():
         if key not in applied_keys:
@@ -262,7 +263,7 @@ def update_config(workspace_root: Path, updates: dict[str, Any]) -> None:
             else:
                 val_str = str(val)
             new_lines.append(f"{key}: {val_str}")
-            
+
     path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
 
 

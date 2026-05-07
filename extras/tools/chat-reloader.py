@@ -10,7 +10,6 @@ Usage:
     Use in chat: /reload
 """
 
-import os
 import sys
 
 from nexus_nancy.tools import ToolDefinition
@@ -40,18 +39,22 @@ def register_tools():
     return [
         ToolDefinition(
             name="reload",
-            description="Reload the current chat session. Use when conversation gets stuck, context is corrupted, or you want to start fresh. Optional reason parameter to log why reload was needed.",
+            description=(
+                "Reload the current chat session. Use when conversation gets stuck, "
+                "context is corrupted, or you want to start fresh. Optional reason "
+                "parameter to log why reload was needed."
+            ),
             parameters={
                 "type": "object",
                 "properties": {
                     "reason": {
                         "type": "string",
-                        "description": "Optional reason for reloading (will be displayed)"
+                        "description": "Optional reason for reloading (will be displayed)",
                     }
                 },
-                "required": []
+                "required": [],
             },
             handler=reload_chat,
-            slash_command="/reload"
+            slash_command="/reload",
         )
     ]

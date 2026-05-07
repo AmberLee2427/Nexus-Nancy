@@ -28,14 +28,16 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install dependencies
         run: |
           pip install ruff
-      - name: Run Ruff
-        run: ruff check src tests
+      - name: Run Ruff Check
+        run: ruff check .
+      - name: Run Ruff Format
+        run: ruff format --check .
 
   test:
     name: Test
@@ -44,7 +46,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install dependencies
@@ -61,7 +63,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install build dependencies
@@ -69,7 +71,7 @@ jobs:
       - name: Build wheel and sdist
         run: python -m build
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@v1
         with:
           password: ${{ secrets.PYPI_TOKEN }}
 
@@ -107,7 +109,7 @@ jobs:
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
       - name: Create or update GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
           name: ${{ steps.meta.outputs.tag }}

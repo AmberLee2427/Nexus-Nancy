@@ -16,7 +16,7 @@ class NativeOpenAIProvider(LLMProvider):
     def __init__(self, cfg: Config, workspace_root: Path):
         self.cfg = cfg
         self.workspace_root = workspace_root
-        
+
         self.api_key, self.api_key_source = resolve_api_key(cfg, workspace_root)
         self.base_url = cfg.base_url.rstrip("/")
         self._validate_client_config()
