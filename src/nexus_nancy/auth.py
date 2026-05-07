@@ -64,6 +64,14 @@ def login_codex(session_path: Path):
     state = secrets.token_hex(32)
     code_verifier, code_challenge = generate_pkce()
 
+    existing_org_id = None
+    if session_path.exists():
+        try:
+            data = json.loads(session_path.read_text(encoding="utf-8"))
+            existing_org_id = data.get("organization_id")
+        except Exception:
+            pass
+
     params = {
         "client_id": client_id,
         "response_type": "code",
@@ -75,6 +83,9 @@ def login_codex(session_path: Path):
         "codex_cli_simplified_flow": "true",
         "id_token_add_organizations": "true",
     }
+    if existing_org_id:
+        params["organization"] = existing_org_id
+
     auth_url = "https://auth.openai.com/oauth/authorize?" + urlencode(params)
 
     print("\n" + "=" * 60)
@@ -223,9 +234,19 @@ def login_codex(session_path: Path):
                 print(f"[WARN] API key upgrade failed: {exchange_resp.text}")
                 print("[INFO] Falling back to standard session token.")
         else:
-            # Silently skip the upgrade, matching ChatMock.
-            # The standard session token (access_token) is used alongside the headers.
-            pass
+            if org_id:
+                print("\n[!] MULTIPLE ORGANIZATIONS DETECTED [!]")
+                print(f"We found your default organization ({org_id}) and saved it.")
+                print("To complete the setup, please run 'nnancy auth login' ONE MORE TIME.")
+                print("The next login will use this organization to generate your API key.")
+                
+                # We save the tokens so far, including org_id
+                session_path.parent.mkdir(parents=True, exist_ok=True)
+                session_path.write_text(json.dumps(tokens, indent=2), encoding="utf-8")
+                session_path.chmod(0o600)
+                sys.exit(0)
+            else:
+                print("[WARN] No organization found. Cannot upgrade to API key.")
     
     session_path.parent.mkdir(parents=True, exist_ok=True)
     session_path.write_text(json.dumps(tokens, indent=2), encoding="utf-8")
