@@ -233,16 +233,16 @@ def main() -> None:
         
         updates = {
             "auth_type": "codex",
-            "base_url": "https://api.openai.com/v1",
+            # We explicitly do NOT set base_url to api.openai.com/v1 here
+            # because Codex tokens only work against backend-api endpoints
+            # or a local bridge server like ChatMock (e.g. http://localhost:8000/v1).
         }
-        # If the model looks like a local file or is a known local-only name,
-        # switch it to a sane OpenAI default so the user isn't immediatey 404ed.
-        if cfg.model.endswith(".gguf") or "gemma" in cfg.model.lower():
-            updates["model"] = "gpt-4o"
-            print("[INFO] Local model detected; switching config to gpt-4o for OpenAI.")
         
         update_config(workspace_root, updates)
         print("[OK] Config updated to use OpenAI Codex.")
+        print("[!] Note: Codex tokens CANNOT be used directly against api.openai.com/v1.")
+        print("    You must run a local bridge server (like ChatMock) and set your")
+        print("    base_url to point to it (e.g. http://127.0.0.1:8000/v1)")
         return
 
     if command == "mock-server":
