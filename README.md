@@ -58,6 +58,7 @@ Execution routing is controlled in `.agents/nnancy.yaml`:
 - `execution_strategy: native_openai` requires verified native tool support and fails loudly otherwise.
 - `native_tools`, `reasoning_channel`, and `parallel_tool_calls` default to `auto`; set a boolean only when you want an explicit override.
 - `capability_probe: true` enables a cheap live probe that asks the provider to return a synthetic tool call without executing any local tool.
+- `provider: native_openai` is the default. Change to `codex` if using the Codex plugin (see below).
 
 Edit these with:
 
@@ -67,7 +68,24 @@ nnancy instructions
 nnancy secrets
 ```
 
-For API key management during chat sessions:
+## Providers
+
+Nexus-Nancy supports pluggable LLM backends. By default, it uses `native_openai` which speaks standard OpenAI JSON to any compatible URL.
+
+Custom providers can be added via plugins. The most popular is the **Codex Provider**, which allows you to use a $20/mo ChatGPT Plus subscription by spoofing the official OpenAI Codex CLI.
+
+### Using ChatGPT Plus (Codex)
+
+1. Install the provider plugin (see **Extras** below).
+2. Run `/codex-login` inside Nancy to authenticate.
+3. Update `.agents/nnancy.yaml`:
+   ```yaml
+   provider: codex
+   model: gpt-5.5-instant  # Use /codex-models to see available slugs
+   ```
+
+## Guides
+
 
 - `/config` opens `.agents/nnancy.yaml`
 - `/key` replaces the API key value (does not print current key)
@@ -84,7 +102,19 @@ Official extensions are in the `extras/` directory:
 
 - **Tools**: Single-file scripts in `extras/tools/` - copy to `.agents/tools/`
 - **Plugins**: Pip-installable packages in `extras/plugins/`
+  - `nancy-provider-codex`: Native ChatGPT Plus support.
 - **Templates**: Start points for building your own tools or plugins
+
+### Installing on Remote Environments (e.g. Nexus)
+
+If you have a clone of the repository on a remote server:
+
+1. Update your clone: `git pull origin main`
+2. Install the plugin in your environment:
+   ```bash
+   pip install -e extras/plugins/nancy-provider-codex
+   ```
+3. Authenticate and configure as described in the **Providers** section above.
 
 See [extras/README.md](extras/README.md) for the full registry.
 
