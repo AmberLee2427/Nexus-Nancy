@@ -12,10 +12,8 @@ class CodexAuth:
         self.secret_path = workspace_root / ".agents/secrets/codex.json"
 
     def run(self):
-        print("\n--- Codex Authentication (Step 1: Discovery) ---")
+        print("\n--- Codex Authentication: Initial Discovery ---")
         tokens = self._get_device_tokens()
-        if not tokens:
-            return "error: authentication failed (Step 1)."
         
         claims = jwt.decode(tokens["id_token"], options={"verify_signature": False})
         auth_claim = claims.get("https://api.openai.com/auth", {})
@@ -25,10 +23,8 @@ class CodexAuth:
         if org_id:
             print(f"\nDetected Organization: {org_id}")
             print(f"Detected Account: {account_id}")
-            print("\n--- Codex Authentication (Step 2: Scoped Token) ---")
+            print("\n--- Codex Authentication: Scoped Token Verification ---")
             tokens = self._get_device_tokens(org_id)
-            if not tokens:
-                return "error: authentication failed (Step 2)."
 
         self.secret_path.parent.mkdir(parents=True, exist_ok=True)
         data = {
@@ -54,15 +50,16 @@ class CodexAuth:
             )
             
             if resp.status_code != 200:
-                print(f"\nError requesting device code: HTTP {resp.status_code}")
-                print(f"Response: {resp.text}")
-                return None
+                raise RuntimeError(
+                    f"failed to request device code: HTTP {resp.status_code}: {resp.text}"
+                )
 
             data = resp.json()
             verification_uri = data.get("verification_uri")
             if not verification_uri:
-                print(f"\nError: 'verification_uri' missing from response. Keys: {list(data.keys())}")
-                return None
+                raise KeyError(
+                    f"'verification_uri' missing from response. Keys present: {list(data.keys())}. Body: {data}"
+                )
 
             if organization_id:
                 verification_uri += f"?organization={organization_id}"
@@ -81,11 +78,19 @@ class CodexAuth:
                     "https://auth.openai.com/api/accounts/deviceauth/token",
                     data={"client_id": CLIENT_ID, "device_code": device_code},
                     headers=headers
-                ).json()
+                )
 
-                if "access_token" in token_resp:
-                    print(" Done!")
-                    return token_resp
-                if token_resp.get("error") != "authorization_pending":
-                    print(f"\nError: {token_resp.get('error_description', 'Unknown error')}")
-                    return None
+                if token_resp.status_code == 200:
+                    data = token_resp.json()
+                    if "access_token" in data:
+                        print(" Done!")
+                        return data
+                
+                # Check for errors other than pending
+                err_data = token_resp.json()
+                error = err_data.get("error")
+                if error != "authorization_pending":
+                    print(" Failed.")
+                    raise RuntimeError(
+                        f"token polling failed: {error}: {err_data.get('error_description', 'no description')}"
+                    )
