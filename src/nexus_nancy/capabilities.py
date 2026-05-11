@@ -64,9 +64,9 @@ def detect_capabilities(
             if client is None:
                 if workspace_root is None:
                     raise RuntimeError("workspace_root required for live capability probe")
-                from .llm import LLMClient
+                from .provider import get_provider
 
-                client = LLMClient(cfg, workspace_root)
+                client = get_provider(cfg, workspace_root)
 
             p_caps = client.probe_capabilities()
             if p_caps.get("native_tools"):

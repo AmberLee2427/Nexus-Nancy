@@ -40,21 +40,36 @@ class CodexAuth:
         return "Authentication successful."
 
     def _get_device_tokens(self, organization_id=None):
+        headers = {
+            "User-Agent": "Codex/0.129.0 (darwin; arm64)",
+            "Accept": "application/json",
+        }
         with httpx.Client() as client:
             resp = client.post(
                 "https://auth.openai.com/api/accounts/deviceauth/usercode",
-                data={"client_id": CLIENT_ID}
-            ).json()
+                data={"client_id": CLIENT_ID},
+                headers=headers
+            )
+            
+            if resp.status_code != 200:
+                print(f"\nError requesting device code: HTTP {resp.status_code}")
+                print(f"Response: {resp.text}")
+                return None
 
-            verification_uri = resp["verification_uri"]
+            data = resp.json()
+            verification_uri = data.get("verification_uri")
+            if not verification_uri:
+                print(f"\nError: 'verification_uri' missing from response. Keys: {list(data.keys())}")
+                return None
+
             if organization_id:
                 verification_uri += f"?organization={organization_id}"
 
             print(f"\n1. Open this URL: {verification_uri}")
-            print(f"2. Enter this code: {resp['user_code']}")
+            print(f"2. Enter this code: {data['user_code']}")
 
-            interval = resp.get("interval", 5)
-            device_code = resp["device_code"]
+            interval = data.get("interval", 5)
+            device_code = data["device_code"]
             
             print("\nWaiting for verification...", end="", flush=True)
             while True:
@@ -62,7 +77,8 @@ class CodexAuth:
                 print(".", end="", flush=True)
                 token_resp = client.post(
                     "https://auth.openai.com/api/accounts/deviceauth/token",
-                    data={"client_id": CLIENT_ID, "device_code": device_code}
+                    data={"client_id": CLIENT_ID, "device_code": device_code},
+                    headers=headers
                 ).json()
 
                 if "access_token" in token_resp:
