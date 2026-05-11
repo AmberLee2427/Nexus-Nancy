@@ -132,39 +132,38 @@ class NancyTUI(App[None]):
     CSS = """
     Screen {
         layout: vertical;
-        background: #1c1327;
-        color: #f1e8ff;
+        background: #140d21;
+        color: #f2e9fb;
     }
 
     Header {
-        background: #4f2f73;
-        color: #f7eeff;
+        background: #4a2870;
+        color: #f8def6;
     }
 
     Footer {
-        background: #322145;
-        color: #e7d6fb;
+        background: #27163b;
+        color: #e7d4f6;
     }
 
     #transcript {
         height: 1fr;
-        background: #251a33;
-        color: #efe5ff;
-        border: round #6d4f92;
+        background: #120a1c;
+        border: round #7e53ad;
         padding: 0 1;
     }
 
     #status {
         height: auto;
         padding: 0 2;
-        background: #2f2141;
-        color: #d9c9ed;
+        background: #221333;
+        color: #e5d6f5;
     }
 
     #prompt {
-        background: #2b1d3a;
-        color: #f6ecff;
-        border: round #8d6ab3;
+        background: #1b1029;
+        color: #f7efff;
+        border: round #b06ae0;
     }
 
     .block {
@@ -218,17 +217,12 @@ class NancyTUI(App[None]):
 
     .debug-block, .error-block {
         margin: 1 2;
-    }
-
-    .debug-block {
-        margin: 1 0;
-        border: round #745b92;
-        background: #14101d;
+        border: round #4a2870;
+        background: #1e1431;
     }
 
     .error-block {
-        border: round #d46a8b;
-        background: #341522;
+        border: round #a83232;
     }
 
     .debug-body, .error-body {
