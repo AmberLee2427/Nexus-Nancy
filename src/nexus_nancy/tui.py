@@ -350,9 +350,9 @@ class NancyTUI(App[None]):
             )
             await self._render_prompt_result(result)
         except Exception as exc:  # pragma: no cover
-            # Preserve the original exception text exactly. The TUI is a display
+            # Preserve the original exception text and type. The TUI is a display
             # surface, not an editorial layer.
-            await self._append_block("error", "ERR", str(exc))
+            await self._append_block("error", "ERR", f"{type(exc).__name__}: {exc}")
 
         self._refresh_status()
 

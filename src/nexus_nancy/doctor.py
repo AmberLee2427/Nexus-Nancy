@@ -97,7 +97,7 @@ def run_doctor(cfg: Config, workspace_root: Path) -> DoctorReport:
         )
     except Exception as exc:
         route_ok = False
-        route_info = str(exc)
+        route_info = f"{type(exc).__name__}: {exc}"
     checks.append(("execution_route", route_ok, route_info))
 
     # URL health check: /models typically exists on OpenAI-compatible servers.
@@ -125,8 +125,8 @@ def run_doctor(cfg: Config, workspace_root: Path) -> DoctorReport:
             url_info += f" ({resp.text.strip()})"
     except Exception as exc:  # pragma: no cover
         url_ok = False
-        # Preserve the raw exception text. Doctor is diagnostic output, not UX.
-        url_info = f"{models_url} -> error: {exc}"
+        # Preserve the raw exception text and type. Doctor is diagnostic output, not UX.
+        url_info = f"{models_url} -> error: {type(exc).__name__}: {exc}"
     checks.append(("base_url_health", url_ok, url_info))
 
     # Preflight payload validation check (no network call).

@@ -91,7 +91,7 @@ def detect_capabilities(
         except Exception as exc:
             return ModelCapabilities(
                 source="probe failure",
-                detail=f"capability probe failed: {exc}",
+                detail=f"capability probe failed: {type(exc).__name__}: {exc}",
             )
 
     return ModelCapabilities(source="fallback", detail="capability probe disabled")

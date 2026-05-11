@@ -203,9 +203,13 @@ def main() -> None:
         print(HELP)
         return
 
-    def fail(message: str) -> None:
+    def fail(exc: Exception | str) -> None:
         # Do not sanitize or paraphrase startup/request failures here. The raw
         # message is usually the only useful thing the user has.
+        if isinstance(exc, Exception):
+            message = f"{type(exc).__name__}: {exc}"
+        else:
+            message = exc
         print(f"error: {message}", file=sys.stderr, flush=True)
         raise SystemExit(1)
 
@@ -233,7 +237,7 @@ def main() -> None:
                 sys.argv.append(str(mock_port))
             runpy.run_path(str(script_path), run_name="__main__")
         except MockServerInstallError as exc:
-            fail(str(exc))
+            fail(exc)
         finally:
             if argv_backup is not None:
                 sys.argv = argv_backup
@@ -253,7 +257,7 @@ def main() -> None:
             result = run_prompt(state, llm, sandbox, mock_prompt or "")
             print(result.to_cli_text())
         except Exception as exc:
-            fail(str(exc))
+            fail(exc)
         finally:
             if process is not None and process.poll() is None:
                 process.terminate()
@@ -265,21 +269,24 @@ def main() -> None:
         return
 
     if command == "doctor":
-        report = run_doctor(cfg, workspace_root)
-        print(report.render())
-        raise SystemExit(0 if report.ok else 1)
+        try:
+            report = run_doctor(cfg, workspace_root)
+            print(report.render())
+            raise SystemExit(0 if report.ok else 1)
+        except Exception as exc:
+            fail(exc)
 
     try:
         state, llm, sandbox = build_state(cfg, yolo=yolo)
     except Exception as exc:
-        fail(str(exc))
+        fail(exc)
 
     if single_prompt:
         try:
             result = run_prompt(state, llm, sandbox, single_prompt)
             print(result.to_cli_text())
         except Exception as exc:
-            fail(str(exc))
+            fail(exc)
         return
 
     # Textual needs a real TTY; fallback to simple input loop otherwise.
@@ -288,7 +295,7 @@ def main() -> None:
             NancyTUI(state, llm, sandbox).run()
             return
         except Exception as exc:
-            fail(str(exc))
+            fail(exc)
 
     while True:
         try:
@@ -306,7 +313,7 @@ def main() -> None:
             result = run_prompt(state, llm, sandbox, text)
             print(result.to_cli_text())
         except Exception as exc:
-            print(f"error: {exc}", file=sys.stderr, flush=True)
+            print(f"error: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
 
 
 if __name__ == "__main__":

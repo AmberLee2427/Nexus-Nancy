@@ -556,7 +556,11 @@ def run_prompt(
                 result = tool.handler(**args)
                 return PromptResult(system_messages=[result])
             except Exception as e:
-                return PromptResult(system_messages=[f"error executing {cmd_name}: {e}"])
+                # Include the exception type for technical users (scientists)
+                error_type = type(e).__name__
+                return PromptResult(
+                    system_messages=[f"error executing {cmd_name}: {error_type}: {e}"]
+                )
 
     # Built-in slash commands
     if command == "/config":
