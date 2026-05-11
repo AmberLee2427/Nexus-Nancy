@@ -554,7 +554,9 @@ def run_prompt(
                     args[part] = ""
             try:
                 result = tool.handler(**args)
-                return PromptResult(system_messages=[result])
+                return PromptResult(
+                    system_messages=[result] if result is not None else []
+                )
             except Exception as e:
                 # Include the exception type for technical users (scientists)
                 error_type = type(e).__name__

@@ -14,7 +14,8 @@ class CodexAuth:
     def run(self):
         print("\n--- Codex Authentication (Step 1: Discovery) ---")
         tokens = self._get_device_tokens()
-        if not tokens: return
+        if not tokens:
+            return "error: authentication failed (Step 1)."
         
         claims = jwt.decode(tokens["id_token"], options={"verify_signature": False})
         auth_claim = claims.get("https://api.openai.com/auth", {})
@@ -23,10 +24,11 @@ class CodexAuth:
 
         if org_id:
             print(f"\nDetected Organization: {org_id}")
-            print("Detected Account: {account_id}")
+            print(f"Detected Account: {account_id}")
             print("\n--- Codex Authentication (Step 2: Scoped Token) ---")
             tokens = self._get_device_tokens(org_id)
-            if not tokens: return
+            if not tokens:
+                return "error: authentication failed (Step 2)."
 
         self.secret_path.parent.mkdir(parents=True, exist_ok=True)
         data = {

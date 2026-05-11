@@ -215,16 +215,21 @@ class NancyTUI(App[None]):
         border: round #8262a8;
     }
 
-    .debug-block {
-        margin: 1 0;
-        border: round #745b92;
-        background: #14101d;
+    .debug-block, .error-block {
+        margin: 1 2;
+        border: round #4a2870;
+        background: #1e1431;
     }
 
-    .debug-body {
+    .error-block {
+        border: round #a83232;
+    }
+
+    .debug-body, .error-body {
         padding: 0 1;
         color: #d8cee6;
     }
+
     """
 
     def __init__(self, state: SessionState, llm_client: LLMProvider, sandbox: SandboxPolicy):
@@ -451,8 +456,18 @@ class NancyTUI(App[None]):
 
     async def _append_block(self, kind: str, title: str, text: str) -> None:
         transcript = self.query_one("#transcript", VerticalScroll)
-        widget = Static(Text(text or ""), classes=f"block {kind}-block")
-        widget.border_title = title
+        if kind == "error":
+            body = Static(Text(text or ""), classes="error-body")
+            widget = Collapsible(
+                body,
+                title=title,
+                collapsed=False,  # Start expanded for immediate visibility
+                classes="error-block block",
+            )
+        else:
+            widget = Static(Text(text or ""), classes=f"block {kind}-block")
+            widget.border_title = title
+
         self._plain_blocks.append((title, text))
         self._persist_transcript()
         await transcript.mount(widget)
@@ -526,5 +541,8 @@ class NancyTUI(App[None]):
         for marker, text in self._plain_blocks:
             lines.append("")
             lines.append(f"[{marker}]")
-            lines.extend(text.splitlines() or [""])
+            if text:
+                lines.extend(text.splitlines() or [""])
+            else:
+                lines.append("")
         self.transcript_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
