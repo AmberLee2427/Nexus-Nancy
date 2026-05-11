@@ -141,9 +141,9 @@ class ToolRegistry:
                             self.register(tool)
                 except Exception as exc:
                     print(f"warning: failed to load entry point {ep.name}: {exc}", file=sys.stderr)
-        except Exception:
-            # metadata.entry_points can fail in some environments; ignore.
-            pass
+        except Exception as exc:
+            # metadata.entry_points can fail in some environments; report it.
+            print(f"warning: failed to list plugin entry points: {type(exc).__name__}: {exc}", file=sys.stderr)
 
     def _load_local_tools(self, workspace_root: Path):
         tools_dir = workspace_root / ".agents" / "tools"

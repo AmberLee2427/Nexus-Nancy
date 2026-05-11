@@ -57,9 +57,9 @@ def register_providers() -> None:
                     f"warning: failed to load provider entry point {ep.name}: {exc}",
                     file=sys.stderr,
                 )
-    except Exception:
-        # metadata.entry_points can fail in some environments; ignore.
-        pass
+    except Exception as exc:
+        # metadata.entry_points can fail in some environments; report it.
+        print(f"warning: failed to list provider entry points: {type(exc).__name__}: {exc}", file=sys.stderr)
 
 
 def get_provider_class(name: str) -> type[LLMProvider]:

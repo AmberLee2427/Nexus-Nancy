@@ -232,5 +232,6 @@ class NativeOpenAIProvider(LLMProvider):
             has_reasoning = bool(message.get("reasoning_content"))
 
             return {"native_tools": has_tools, "reasoning_channel": has_reasoning}
-        except Exception:
-            return {"native_tools": False, "reasoning_channel": False}
+        except Exception as exc:
+            # Re-raise with type info so the caller (capabilities.py) can report it.
+            raise RuntimeError(f"probe request failed: {type(exc).__name__}: {exc}") from exc
