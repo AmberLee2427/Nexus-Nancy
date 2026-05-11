@@ -554,9 +554,12 @@ def run_prompt(
                     args[part] = ""
             try:
                 result = tool.handler(**args)
-                return PromptResult(
-                    system_messages=[result] if result is not None else []
-                )
+                if result is None:
+                    raise RuntimeError(
+                        f"tool handler for '{cmd_name}' returned None; "
+                        "handlers must return a string (even if empty) to acknowledge the command"
+                    )
+                return PromptResult(system_messages=[result])
             except Exception as e:
                 # Include the exception type for technical users (scientists)
                 error_type = type(e).__name__
