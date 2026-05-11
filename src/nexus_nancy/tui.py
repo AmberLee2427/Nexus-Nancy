@@ -148,86 +148,84 @@ class NancyTUI(App[None]):
 
     #transcript {
         height: 1fr;
-        background: #120a1c;
-        border: round #7e53ad;
+        background: #0f0814;
+        border: round #9945cc;
         padding: 0 1;
     }
 
     #status {
         height: auto;
         padding: 0 2;
-        background: #221333;
-        color: #e5d6f5;
+        background: #1a0b26;
+        color: #f0e6ff;
     }
 
     #prompt {
-        background: #1b1029;
+        background: #14081c;
         color: #f7efff;
-        border: round #b06ae0;
+        border: round #d649d6;
     }
 
     .block {
         margin: 1 0;
         padding: 0 1;
-        border: round #6f5588;
+        border: round #8b5cf6;
     }
 
     .user-block {
-        background: #28142f;
+        background: #230d2b;
         color: #ffe4f2;
-        border: round #cc79c7;
+        border: round #e879f9;
     }
 
     .system-block {
-        background: #1b1526;
-        color: #d6c9e4;
-        border: round #68567c;
-    }
-
-    .error-block {
-        background: #341522;
-        color: #ffd6e2;
-        border: round #d46a8b;
+        background: #160e21;
+        color: #d8b4fe;
+        border: round #7c3aed;
     }
 
     .response-block {
-        background: #191126;
-        color: #f1e8ff;
-        border: round #9961d6;
+        background: #11081a;
+        color: #f5f3ff;
+        border: round #a855f7;
     }
 
     .system-not-ready-block {
-        background: #4a1515;
-        color: #ffcccc;
-        border: round #cc3333;
+        background: #310d0d;
+        color: #fca5a5;
+        border: round #ef4444;
         text-style: bold;
     }
 
     .tool-block {
-        background: #181325;
-        color: #efe3ff;
-        border: round #8d76cf;
+        background: #0d091a;
+        color: #ddd6fe;
+        border: round #818cf8;
     }
 
     .raw-block {
-        background: #17111f;
-        color: #ded2ec;
-        border: round #8262a8;
+        background: #120e1a;
+        color: #ede9fe;
+        border: round #6d28d9;
     }
 
     .debug-block, .error-block {
         margin: 1 2;
-        border: round #4a2870;
-        background: #1e1431;
+        background: #1a0b26;
+    }
+
+    .debug-block {
+        border: round #7c3aed;
     }
 
     .error-block {
-        border: round #a83232;
+        border: round #f43f5e;
+        background: #2d0a14;
     }
 
     .debug-body, .error-body {
         padding: 0 1;
-        color: #d8cee6;
+        color: #e9d5ff;
     }
 
     """

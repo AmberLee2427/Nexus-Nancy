@@ -45,7 +45,7 @@ class CodexAuth:
         with httpx.Client() as client:
             resp = client.post(
                 "https://auth.openai.com/api/accounts/deviceauth/usercode",
-                data={"client_id": CLIENT_ID},
+                json={"client_id": CLIENT_ID},
                 headers=headers
             )
             
@@ -76,7 +76,7 @@ class CodexAuth:
                 print(".", end="", flush=True)
                 token_resp = client.post(
                     "https://auth.openai.com/api/accounts/deviceauth/token",
-                    data={"client_id": CLIENT_ID, "device_code": device_code},
+                    json={"client_id": CLIENT_ID, "device_code": device_code},
                     headers=headers
                 )
 
