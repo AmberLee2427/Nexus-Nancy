@@ -20,11 +20,26 @@ class CodexAuth:
         org_id = auth_claim.get("organization_id")
         account_id = auth_claim.get("chatgpt_account_id")
 
+        # If not in JWT, try the /v1/me endpoint
+        if not org_id or not account_id:
+            try:
+                with httpx.Client() as client:
+                    me_resp = client.get(
+                        "https://api.openai.com/v1/me",
+                        headers={"Authorization": f"Bearer {tokens['access_token']}"}
+                    ).json()
+                    org_id = org_id or me_resp.get("orgs", {}).get("data", [{}])[0].get("id")
+                    account_id = account_id or me_resp.get("id")
+            except:
+                pass
+
         if org_id:
             print(f"\nDetected Organization: {org_id}")
-            print(f"Detected Account: {account_id}")
+            if account_id:
+                print(f"Detected Account: {account_id}")
             print("\n--- Codex Authentication: Scoped Token Verification ---")
             tokens = self._get_device_tokens(org_id)
+
 
         self.secret_path.parent.mkdir(parents=True, exist_ok=True)
         data = {
@@ -55,28 +70,37 @@ class CodexAuth:
                 )
 
             data = resp.json()
-            verification_uri = data.get("verification_uri")
-            if not verification_uri:
+            # This endpoint uses non-standard 'device_auth_id' instead of 'device_code'
+            # and often omits 'verification_uri'.
+            device_auth_id = data.get("device_auth_id")
+            if not device_auth_id:
                 raise KeyError(
-                    f"'verification_uri' missing from response. Keys present: {list(data.keys())}. Body: {data}"
+                    f"'device_auth_id' missing from response. Body: {data}"
                 )
+            
+            user_code = data["user_code"]
+            verification_uri = data.get("verification_uri", "https://chatgpt.com/codex/device")
 
             if organization_id:
                 verification_uri += f"?organization={organization_id}"
 
             print(f"\n1. Open this URL: {verification_uri}")
-            print(f"2. Enter this code: {data['user_code']}")
+            print(f"2. Enter this code: {user_code}")
 
-            interval = data.get("interval", 5)
-            device_code = data["device_code"]
+            interval = int(data.get("interval", 5))
             
             print("\nWaiting for verification...", end="", flush=True)
             while True:
                 time.sleep(interval)
                 print(".", end="", flush=True)
+                # Polling payload requires BOTH device_auth_id AND user_code
                 token_resp = client.post(
                     "https://auth.openai.com/api/accounts/deviceauth/token",
-                    json={"client_id": CLIENT_ID, "device_code": device_code},
+                    json={
+                        "client_id": CLIENT_ID, 
+                        "device_auth_id": device_auth_id,
+                        "user_code": user_code
+                    },
                     headers=headers
                 )
 
