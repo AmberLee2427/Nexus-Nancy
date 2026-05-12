@@ -23,45 +23,7 @@ from .token_count import estimate_context_tokens
 
 
 class ToolApprovalScreen(ModalScreen[ToolApprovalDecision]):
-    CSS = """
-    ToolApprovalScreen {
-        align: center middle;
-    }
-
-    #approval-dialog {
-        width: 88;
-        max-width: 96;
-        padding: 1 2;
-        background: #1f1824;
-        border: round #d6b24d;
-    }
-
-    #approval-title {
-        text-style: bold;
-        color: #ffe49a;
-        padding-bottom: 1;
-    }
-
-    #approval-body {
-        background: #17111c;
-        color: #f3ebff;
-        border: round #5c4566;
-        padding: 1;
-        margin-bottom: 1;
-    }
-
-    #approval-error {
-        color: #ffb3a2;
-        height: auto;
-        margin-top: 1;
-    }
-
-    #approval-buttons {
-        grid-size: 3;
-        grid-gutter: 1 2;
-        margin-top: 1;
-    }
-    """
+    CSS_PATH = "tui.css"
 
     def __init__(self, request: ToolApprovalRequest) -> None:
         super().__init__()
@@ -116,6 +78,7 @@ class ToolApprovalScreen(ModalScreen[ToolApprovalDecision]):
 
 
 class NancyTUI(App[None]):
+    CSS_PATH = "tui.css"
     BINDINGS = [
         Binding("ctrl+c", "quit", "Quit"),
         Binding("ctrl+l", "clear_transcript", "Clear"),
@@ -128,109 +91,6 @@ class NancyTUI(App[None]):
         Binding("g", "scroll_top", "Top", show=False),
         Binding("G", "scroll_bottom", "Bottom", show=False),
     ]
-
-    CSS = """
-    Screen {
-        layout: vertical;
-        background: #140d21;
-        color: #f2e9fb;
-    }
-
-    Header {
-        background: #4a2870;
-        color: #f8def6;
-    }
-
-    Footer {
-        background: #27163b;
-        color: #e7d4f6;
-    }
-
-    #transcript {
-        height: 1fr;
-        background: #120a1c;
-        border: round #7e53ad;
-        padding: 0 1;
-    }
-
-    #status {
-        height: auto;
-        padding: 0 2;
-        background: #221333;
-        color: #e5d6f5;
-    }
-
-    #prompt {
-        background: #1b1029;
-        color: #f7efff;
-        border: round #b06ae0;
-    }
-
-    .block {
-        margin: 1 0;
-        padding: 0 1;
-        border: round #6f5588;
-    }
-
-    .user-block {
-        background: #28142f;
-        color: #ffe4f2;
-        border: round #cc79c7;
-    }
-
-    .system-block {
-        background: #1b1526;
-        color: #d6c9e4;
-        border: round #68567c;
-    }
-
-    .error-block {
-        background: #341522;
-        color: #ffd6e2;
-        border: round #d46a8b;
-    }
-
-    .response-block {
-        background: #191126;
-        color: #f1e8ff;
-        border: round #9961d6;
-    }
-
-    .system-not-ready-block {
-        background: #4a1515;
-        color: #ffcccc;
-        border: round #cc3333;
-        text-style: bold;
-    }
-
-    .tool-block {
-        background: #181325;
-        color: #efe3ff;
-        border: round #8d76cf;
-    }
-
-    .raw-block {
-        background: #17111f;
-        color: #ded2ec;
-        border: round #8262a8;
-    }
-
-    .debug-block, .error-block {
-        margin: 1 2;
-        border: round #4a2870;
-        background: #1e1431;
-    }
-
-    .error-block {
-        border: round #a83232;
-    }
-
-    .debug-body, .error-body {
-        padding: 0 1;
-        color: #d8cee6;
-    }
-
-    """
 
     def __init__(self, state: SessionState, llm_client: LLMProvider, sandbox: SandboxPolicy):
         super().__init__()

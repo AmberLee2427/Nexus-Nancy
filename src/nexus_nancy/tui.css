@@ -1,0 +1,137 @@
+/* Nancy TUI: Hacker Girlie Aesthetic */
+
+Screen {
+    layout: vertical;
+    background: #140d21;
+    color: #f2e9fb;
+}
+
+Header {
+    background: #4a2870;
+    color: #f8def6;
+}
+
+Footer {
+    background: #27163b;
+    color: #e7d4f6;
+}
+
+#transcript {
+    height: 1fr;
+    background: #0f0814;
+    border: round #9945cc;
+    padding: 0 1;
+}
+
+#status {
+    height: auto;
+    padding: 0 2;
+    background: #1a0b26;
+    color: #f0e6ff;
+}
+
+#prompt {
+    background: #14081c;
+    color: #f7efff;
+    border: round #d649d6;
+}
+
+.block {
+    margin: 1 0;
+    padding: 0 1;
+    border: round #8b5cf6;
+}
+
+.user-block {
+    background: #230d2b;
+    color: #ffe4f2;
+    border: round #e879f9;
+}
+
+.system-block {
+    background: #160e21;
+    color: #d8b4fe;
+    border: round #7c3aed;
+}
+
+.response-block {
+    background: #11081a;
+    color: #f5f3ff;
+    border: round #a855f7;
+}
+
+.system-not-ready-block {
+    background: #310d0d;
+    color: #fca5a5;
+    border: round #ef4444;
+    text-style: bold;
+}
+
+.tool-block {
+    background: #0d091a;
+    color: #ddd6fe;
+    border: round #818cf8;
+}
+
+.raw-block {
+    background: #120e1a;
+    color: #ede9fe;
+    border: round #6d28d9;
+}
+
+.debug-block, .error-block {
+    margin: 1 2;
+    background: #1a0b26;
+}
+
+.debug-block {
+    border: round #7c3aed;
+}
+
+.error-block {
+    border: round #f43f5e;
+    background: #2d0a14;
+}
+
+.debug-body, .error-body {
+    padding: 0 1;
+    color: #e9d5ff;
+}
+
+ToolApprovalScreen {
+    align: center middle;
+}
+
+#approval-dialog {
+    width: 88;
+    max-width: 96;
+    padding: 1 2;
+    background: #1f1824;
+    border: round #d6b24d;
+}
+
+#approval-title {
+    text-style: bold;
+    color: #ffe49a;
+    padding-bottom: 1;
+}
+
+#approval-body {
+    background: #17111c;
+    color: #f3ebff;
+    border: round #5c4566;
+    padding: 1;
+    margin-bottom: 1;
+}
+
+#approval-error {
+    color: #ffb3a2;
+    height: auto;
+    margin-top: 1;
+}
+
+#approval-buttons {
+    grid-size: 3;
+    grid-gutter: 1 2;
+    margin-top: 1;
+}
