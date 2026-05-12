@@ -725,6 +725,13 @@ def build_state(cfg: Config, yolo: bool) -> tuple[SessionState, LLMProvider, San
     state = SessionState.create(cfg, instructions, workspace_root, logs_dir)
     state.execution_strategy = selection.selected
     state.capabilities = selection.capabilities
+    
+    # Surface any plugin or local tool loading errors found during initialize_tools
+    for error in REGISTRY.loading_errors:
+        state.log.write("plugin_error", error)
+        # Note: These will be rendered by the TUI/CLI as system messages
+        # after build_state returns.
+    
     llm = get_provider(cfg, workspace_root)
     allowlist = load_sandbox_allowlist(workspace_root)
     sandbox_root = Path(cfg.sandbox_root).expanduser()

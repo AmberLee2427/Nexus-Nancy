@@ -120,77 +120,43 @@ class NancyTUI(App[None]):
         yield Footer()
 
     async def on_mount(self) -> None:
+        await self._append_block("system", "SYS", "Nexus-Nancy ready")
+
+        # Surface any plugin loading errors recorded at startup
+        from .tools import REGISTRY
+
+        for error in REGISTRY.loading_errors:
+            await self._append_block("error", "ERR", error)
+
+        # List all registered tools for transparency
+        tool_names = sorted(REGISTRY._tools.keys())
+        await self._append_block("system", "SYS", f"Loaded tools: {', '.join(tool_names)}")
+
+        await self._append_block(
+            "system",
+            "SYS",
+            "Logs and transcripts are plain local files in this workspace. Anyone with access here can read them.",
+        )
         self._refresh_status()
         self.query_one("#prompt", Input).focus()
-        await self._run_startup_diagnostics()
-
-    async def _run_startup_diagnostics(self) -> None:
-        from .doctor import run_doctor
-
-        # Run doctor logic for an authoritative system snapshot.
-        report = await asyncio.to_thread(run_doctor, self.state.cfg, self.state.workspace_root)
-
-        loop_name = (
-            "Native OpenAI-Tool Loop"
-            if self.state.execution_strategy == "native_openai"
-            else "Universal Harness Loop"
-        )
-
-        # 1. Permanent Header
-        if report.ok:
-            header = f"Nancy System Ready\nMode: {loop_name}"
-            await self._append_block("system", "SYS", header)
-        else:
-            header = f"Nancy System NOT Ready 🔴\nMode: {loop_name}"
-            await self._append_block("system-not-ready", "SYS", header)
-
-        # 2. Collapsible Health Snapshot
-        snapshot_lines = []
-        for line in report.lines:
-            if ":" not in line or "Nexus-Nancy doctor" in line or "overall:" in line:
-                continue
-
-            # Make the doctor lines look "Nancy-grade" human-readable.
-            clean = line.replace("[OK]", "✅").replace("[FAIL]", "❌")
-            clean = clean.replace("api_key:", "API Key").replace("base_url_health:", "LLM Health")
-            clean = clean.replace("execution_route:", "Route Check").replace(
-                "sandbox_root:", "Sandbox"
-            )
-            clean = clean.replace("config_file:", "Config").replace("workspace:", "Root")
-            snapshot_lines.append(clean.strip())
-
-        # Expand snapshot by default if system is not ready
-        await self._append_debug_block(
-            "SYSTEM HEALTH SNAPSHOT", "\n".join(snapshot_lines), expanded=not report.ok
-        )
-
-        # 3. Permanent Footer
-        logs_path = self.state.workspace_root / "logs"
-        transcripts_path = self.state.workspace_root / ".agents" / "transcripts"
-        footer = (
-            f"Logs ({logs_path}/) and transcripts ({transcripts_path}/) are plain local files.\n"
-            "Anyone with access to this workspace can read them."
-        )
-        await self._append_block("system", "SYS", footer)
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         text = event.value.strip()
-        event.input.value = ""
         if not text:
             return
-        if text in {"/quit", "/exit"}:
+
+        self.query_one("#prompt", Input).value = ""
+        if text in {"/exit", "exit", "quit"}:
             self.exit()
             return
-        if text == "/copy":
-            await self.action_copy_mode()
-            self._refresh_status()
+        if text == "/new":
+            self.state.reset(self.state.log.root)
+            await self.action_clear_transcript()
             return
         if text == "/config":
             await self.action_open_config_file()
             await self._append_block(
-                "system",
-                "SYS",
-                f"opened config file: {config_path(self.state.workspace_root)}",
+                "system", "SYS", f"opened config file: {config_path(self.state.workspace_root)}"
             )
             self._refresh_status()
             return
@@ -228,13 +194,7 @@ class NancyTUI(App[None]):
         self._debug_widgets = []
         self._raw_count = 0
         self._debug_collapsed = True
-        await self._append_block("system", "SYS", "Nexus-Nancy ready")
-        await self._append_block(
-            "system",
-            "SYS",
-            "Logs and transcripts are plain local files in this workspace. "
-            "Anyone with access here can read them.",
-        )
+        await self.on_mount()
 
     async def action_copy_mode(self) -> None:
         with self.suspend():
@@ -251,6 +211,7 @@ class NancyTUI(App[None]):
 
     async def action_replace_key_interactive(self) -> None:
         with self.suspend():
+            print("\nUpdating API Key...")
             first = getpass.getpass("New API key (input hidden): ").strip()
             second = getpass.getpass("Confirm API key: ").strip()
         if not first:
@@ -336,9 +297,7 @@ class NancyTUI(App[None]):
     async def _append_raw_block(self, index: int, text: str) -> None:
         await self._append_debug_block(f"RAW {index}", text)
 
-    async def _append_debug_block(
-        self, title: str, text: str, expanded: bool | None = None
-    ) -> None:
+    async def _append_debug_block(self, title: str, text: str) -> None:
         transcript = self.query_one("#transcript", VerticalScroll)
         body = Static(Text(text or ""), classes="debug-body")
         widget = Collapsible(
@@ -347,29 +306,36 @@ class NancyTUI(App[None]):
             collapsed=True,
             classes="debug-block",
         )
-        if expanded is not None:
-            widget.collapsed = not expanded
-        else:
-            widget.collapsed = self._debug_collapsed
+        widget.collapsed = self._debug_collapsed
         self._debug_widgets.append(widget)
         self._plain_blocks.append((title, text))
         self._persist_transcript()
         await transcript.mount(widget)
         transcript.scroll_end(animate=False)
 
-    async def _request_tool_approval(self, request: ToolApprovalRequest) -> ToolApprovalDecision:
+    async def _request_tool_approval(
+        self, request: ToolApprovalRequest
+    ) -> ToolApprovalDecision:
         self.query_one("#status", Static).update("waiting for tool approval...")
         decision = await self.push_screen_wait(ToolApprovalScreen(request))
         self._refresh_status()
         return decision or ToolApprovalDecision(action="deny")
 
-    def _tool_approval_from_worker(self, request: ToolApprovalRequest) -> ToolApprovalDecision:
+    def _tool_approval_from_worker(
+        self, request: ToolApprovalRequest
+    ) -> ToolApprovalDecision:
         return self.call_from_thread(self._request_tool_approval, request)
 
     def _format_private_block(self, text: str) -> str:
-        # Diagnostic view: show raw protocol spill or internal reasoning.
-        # This text is verbatim from the provider/harness and is not polished.
-        return f"kind: assistant_raw_diagnostic\n\n{text}".strip()
+        # Keep the ugly labels. This is debug output, not polished UI copy.
+        return "\n".join(
+            [
+                "kind: assistant_raw",
+                "note: assistant emitted text outside [RESPONSE]...[/RESPONSE]",
+                "",
+                text,
+            ]
+        ).strip()
 
     def _format_tool_record(self, record) -> str:
         # Tool records stay fielded and explicit on purpose. This should read
@@ -387,12 +353,11 @@ class NancyTUI(App[None]):
     def _refresh_status(self) -> None:
         status = self.query_one("#status", Static)
         mode = "yolo" if self.sandbox.yolo else "sandbox"
-        cwd = Path.cwd().name
+        cwd = self.state.workspace_root.name
         tokens = estimate_context_tokens(self.state.messages, self.state.cfg.model)
         debug_state = "collapsed" if self._debug_collapsed else "expanded"
-        route = getattr(self.state, "execution_strategy", "universal")
         status.update(
-            f"model={self.state.cfg.model} | route={route} | mode={mode} | cwd={cwd} | "
+            f"model={self.state.cfg.model} | mode={mode} | cwd={cwd} | "
             f"context_tokens~{tokens} | debug={debug_state} | id={self.session_id}"
         )
 

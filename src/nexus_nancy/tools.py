@@ -50,6 +50,7 @@ class ToolRegistry:
     def __init__(self):
         self._tools: dict[str, ToolDefinition] = {}
         self._slash_commands: dict[str, ToolDefinition] = {}
+        self.loading_errors: list[str] = []
         self._load_core_tools()
 
     def _load_core_tools(self):
@@ -140,10 +141,14 @@ class ToolRegistry:
                         for tool in plugin.register_tools():
                             self.register(tool)
                 except Exception as exc:
-                    print(f"warning: failed to load entry point {ep.name}: {exc}", file=sys.stderr)
+                    self.loading_errors.append(
+                        f"failed to load entry point {ep.name}: {type(exc).__name__}: {exc}"
+                    )
         except Exception as exc:
             # metadata.entry_points can fail in some environments; report it.
-            print(f"warning: failed to list plugin entry points: {type(exc).__name__}: {exc}", file=sys.stderr)
+            self.loading_errors.append(
+                f"failed to list plugin entry points: {type(exc).__name__}: {exc}"
+            )
 
     def _load_local_tools(self, workspace_root: Path):
         tools_dir = workspace_root / ".agents" / "tools"
@@ -163,7 +168,9 @@ class ToolRegistry:
                         for tool in module.register_tools():
                             self.register(tool)
             except Exception as exc:
-                print(f"warning: failed to load local tool {path.name}: {exc}", file=sys.stderr)
+                self.loading_errors.append(
+                    f"failed to load local tool {path.name}: {type(exc).__name__}: {exc}"
+                )
 
     @property
     def specs(self) -> list[dict[str, Any]]:

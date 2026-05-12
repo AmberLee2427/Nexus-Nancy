@@ -4,8 +4,8 @@ from typing import Any, Dict, List, Optional
 import httpx
 from nexus_nancy.provider import LLMProvider
 from nexus_nancy.tools import ToolDefinition
-from .auth import CodexAuth, CLIENT_ID
 from nexus_nancy.config import Config
+from .auth import CodexAuth, CLIENT_ID
 
 class CodexProvider(LLMProvider):
     def __init__(self, cfg, workspace_root: Path):
