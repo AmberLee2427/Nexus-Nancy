@@ -20,9 +20,12 @@ Footer {
     height: 1fr;
     background: #120a1c;
     border: round #7e53ad;
-    padding: 0 1;
+    padding: 0 2 0 1;
+    scrollbar-color: #6f5588;
+    scrollbar-color-hover: #7e53ad;
+    scrollbar-color-active: #9961d6;
+    scrollbar-background: #120a1c;
 }
-
 #status {
     height: auto;
     padding: 0 2;
@@ -67,13 +70,14 @@ Footer {
 }
 
 .system-not-ready-block {
-    background: #4a1515;
-    color: #ffcccc;
-    border: round #cc3333;
+    background: #341522;
+    color: #ffd6e2;
+    border: round #d46a8b;
     text-style: bold;
 }
 
 .tool-block {
+
     background: #181325;
     color: #efe3ff;
     border: round #8d76cf;
