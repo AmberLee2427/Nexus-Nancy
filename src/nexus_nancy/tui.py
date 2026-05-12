@@ -4,7 +4,6 @@ import asyncio
 import getpass
 import shutil
 import subprocess
-from pathlib import Path
 from uuid import uuid4
 
 from rich.text import Text
@@ -135,7 +134,10 @@ class NancyTUI(App[None]):
         await self._append_block(
             "system",
             "SYS",
-            "Logs and transcripts are plain local files in this workspace. Anyone with access here can read them.",
+            (
+                "Logs and transcripts are plain local files in this workspace. "
+                "Anyone with access here can read them."
+            ),
         )
         self._refresh_status()
         self.query_one("#prompt", Input).focus()
@@ -313,17 +315,13 @@ class NancyTUI(App[None]):
         await transcript.mount(widget)
         transcript.scroll_end(animate=False)
 
-    async def _request_tool_approval(
-        self, request: ToolApprovalRequest
-    ) -> ToolApprovalDecision:
+    async def _request_tool_approval(self, request: ToolApprovalRequest) -> ToolApprovalDecision:
         self.query_one("#status", Static).update("waiting for tool approval...")
         decision = await self.push_screen_wait(ToolApprovalScreen(request))
         self._refresh_status()
         return decision or ToolApprovalDecision(action="deny")
 
-    def _tool_approval_from_worker(
-        self, request: ToolApprovalRequest
-    ) -> ToolApprovalDecision:
+    def _tool_approval_from_worker(self, request: ToolApprovalRequest) -> ToolApprovalDecision:
         return self.call_from_thread(self._request_tool_approval, request)
 
     def _format_private_block(self, text: str) -> str:
