@@ -37,6 +37,7 @@ nnancy = "nexus_nancy.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/nexus_nancy"]
+artifacts = ["*.css"]
 
 [tool.hatch.build.targets.wheel.force-include]
 ".agents/instructions.txt" = "nexus_nancy/default_agents/instructions.txt"
