@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import runpy
 import socket
 import subprocess
@@ -194,6 +195,14 @@ def _parse_args(
 
 
 def main() -> None:
+    # Most modern terminal emulators (including Nexus/Jupyter) support 24-bit TrueColor
+    # but don't always advertise it via COLORTERM. If we don't force it, hex codes
+    # get rounded to the nearest 256-color match, which often turns Nancy's purples blue.
+    if not os.environ.get("COLORTERM"):
+        term = os.environ.get("TERM", "")
+        if "256color" in term or "truecolor" in term or "xterm" in term:
+            os.environ["COLORTERM"] = "truecolor"
+
     yolo, single_prompt, show_help, command, mock_port, mock_prompt = _parse_args(sys.argv[1:])
     workspace_root = Path.cwd().resolve()
     bootstrap_local_files(workspace_root)
