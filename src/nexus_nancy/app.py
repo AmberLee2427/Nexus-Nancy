@@ -686,6 +686,16 @@ def run_prompt(
                 "Handoff complete. Summary and todo saved. New session started with relay prompt."
             ]
         )
+
+    # Catch unrecognized slash commands before they fall through to the LLM
+    if command.startswith("/"):
+        return PromptResult(
+            system_messages=[
+                f"error: unknown command '{command.split()[0]}'. "
+                "If this is a plugin command, ensure the plugin is installed and loaded correctly."
+            ]
+        )
+
     enriched = _attach_files(user_text, state.workspace_root, state.cfg.max_attachment_bytes)
     state.messages.append({"role": "user", "content": enriched})
     # Log the expanded user message, not a cleaned version, so attachments and
