@@ -92,11 +92,14 @@ class CodexAuth:
             while True:
                 time.sleep(interval)
                 print(".", end="", flush=True)
-                # Polling payload requires ONLY device_auth_id AND user_code.
-                # Including client_id here causes 'deviceauth_authorization_unknown'.
+                # Polling payload requires client_id, device_auth_id AND user_code.
                 token_resp = client.post(
                     "https://auth.openai.com/api/accounts/deviceauth/token",
-                    json={"device_auth_id": device_auth_id, "user_code": user_code},
+                    json={
+                        "client_id": CLIENT_ID,
+                        "device_auth_id": device_auth_id,
+                        "user_code": user_code,
+                    },
                     headers=headers,
                 )
 

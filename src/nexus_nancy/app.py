@@ -687,6 +687,10 @@ def run_prompt(
             ]
         )
 
+    if command == "/copy":
+        # Handled in the TUI/CLI loop itself, but listed here for documentation
+        return PromptResult(system_messages=["opening copy mode..."])
+
     # Catch unrecognized slash commands before they fall through to the LLM
     if command.startswith("/"):
         return PromptResult(
