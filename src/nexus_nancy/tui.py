@@ -166,6 +166,10 @@ class NancyTUI(App[None]):
             await self.action_replace_key_interactive()
             self._refresh_status()
             return
+        if text == "/copy":
+            await self.action_copy_mode()
+            self._refresh_status()
+            return
 
         user_marker = (self.state.cfg.user_display_name or "USER").strip().upper()
         await self._append_block("user", user_marker, text)
