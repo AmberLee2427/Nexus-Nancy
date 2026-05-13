@@ -56,6 +56,7 @@ class CodexAuth:
     def _get_device_tokens(self, organization_id=None):
         headers = {
             "User-Agent": "Codex/0.129.0 (darwin; arm64)",
+            "Content-Type": "application/json",
             "Accept": "application/json",
         }
         with httpx.Client() as client:
@@ -92,11 +93,11 @@ class CodexAuth:
             while True:
                 time.sleep(interval)
                 print(".", end="", flush=True)
-                # Polling payload requires client_id, device_auth_id AND user_code.
+
+                # Polling payload requires ONLY device_auth_id and user_code
                 token_resp = client.post(
                     "https://auth.openai.com/api/accounts/deviceauth/token",
                     json={
-                        "client_id": CLIENT_ID,
                         "device_auth_id": device_auth_id,
                         "user_code": user_code,
                     },
@@ -105,14 +106,45 @@ class CodexAuth:
 
                 if token_resp.status_code == 200:
                     data = token_resp.json()
-                    if "access_token" in data:
-                        print(" Done!")
-                        return data
+                    authorization_code = data.get("authorization_code")
+                    code_verifier = data.get("code_verifier")
+                    if authorization_code and code_verifier:
+                        print(" Verified!")
+                        break
+                    else:
+                        print(" Failed.")
+                        raise RuntimeError(
+                            "deviceauth/token response missing authorization_code or code_verifier"
+                        )
 
-                # Check for errors other than pending
+                if token_resp.status_code in (403, 404):
+                    # Authorization pending, continue polling
+                    continue
+
+                print(" Failed.")
                 err_data = token_resp.json()
-                error = err_data.get("error")
-                if error != "authorization_pending":
-                    print(" Failed.")
-                    desc = err_data.get("error_description", "no description")
-                    raise RuntimeError(f"token polling failed: {error}: {desc}")
+                desc = err_data.get("error", {}).get("message", "no description")
+                raise RuntimeError(f"token polling failed: {token_resp.status_code}: {desc}")
+
+            # Exchange authorization_code for access_token
+            print("Exchanging code for token...", end="", flush=True)
+            oauth_resp = client.post(
+                "https://auth.openai.com/oauth/token",
+                data={
+                    "grant_type": "authorization_code",
+                    "code": authorization_code,
+                    "redirect_uri": "https://auth.openai.com/deviceauth/callback",
+                    "client_id": CLIENT_ID,
+                    "code_verifier": code_verifier,
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+
+            if oauth_resp.status_code != 200:
+                print(" Failed.")
+                raise RuntimeError(
+                    f"token exchange failed: HTTP {oauth_resp.status_code}: {oauth_resp.text}"
+                )
+
+            print(" Done!")
+            return oauth_resp.json()
