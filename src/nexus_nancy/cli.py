@@ -230,10 +230,10 @@ def main() -> None:
         raise SystemExit(1)
 
     if command == "run" and run_tool:
-        from .tools import REGISTRY
-        from .sandbox import SandboxPolicy
         from .config import load_sandbox_allowlist
-        
+        from .sandbox import SandboxPolicy
+        from .tools import REGISTRY
+
         cfg = load_config(workspace_root)
         allowlist = load_sandbox_allowlist(workspace_root)
         sandbox_root_path = Path(cfg.sandbox_root).expanduser()

@@ -93,8 +93,7 @@ class CodexAuth:
             while True:
                 time.sleep(interval)
                 print(".", end="", flush=True)
-
-                # Polling payload requires ONLY device_auth_id and user_code
+                # Polling payload requires ONLY device_auth_id and user_code.
                 token_resp = client.post(
                     "https://auth.openai.com/api/accounts/deviceauth/token",
                     json={
@@ -103,6 +102,7 @@ class CodexAuth:
                     },
                     headers=headers,
                 )
+
 
                 if token_resp.status_code == 200:
                     data = token_resp.json()

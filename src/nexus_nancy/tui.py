@@ -194,9 +194,9 @@ class NancyTUI(App[None]):
                     except Exception as exc:
                         print(f"\nError: {type(exc).__name__}: {exc}")
                         result = f"error executing {cmd_name}: {type(exc).__name__}: {exc}"
-                    
+
                     input("\nPress Enter to return to Nancy...")
-                
+
                 if "error executing" in str(result):
                     await self._append_block("error", "ERR", str(result))
                 else:
