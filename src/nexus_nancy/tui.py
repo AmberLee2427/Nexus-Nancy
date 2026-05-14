@@ -376,7 +376,9 @@ class NancyTUI(App[None]):
     async def _append_raw_block(self, index: int, text: str) -> None:
         await self._append_debug_block(f"RAW {index}", text)
 
-    async def _append_debug_block(self, title: str, text: str) -> None:
+    async def _append_debug_block(
+        self, title: str, text: str, expanded: bool | None = None
+    ) -> None:
         transcript = self.query_one("#transcript", VerticalScroll)
         body = Static(Text(text or ""), classes="debug-body")
         widget = Collapsible(
@@ -385,7 +387,10 @@ class NancyTUI(App[None]):
             collapsed=True,
             classes="debug-block",
         )
-        widget.collapsed = self._debug_collapsed
+        if expanded is not None:
+            widget.collapsed = not expanded
+        else:
+            widget.collapsed = self._debug_collapsed
         self._debug_widgets.append(widget)
         self._plain_blocks.append((title, text))
         self._persist_transcript()
