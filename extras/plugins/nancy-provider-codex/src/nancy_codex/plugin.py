@@ -162,6 +162,7 @@ def register_tools():
             parameters={"type": "object", "properties": {}},
             handler=codex_login_handler,
             slash_command="/codex-login",
+            requires_tty=True
         ),
         ToolDefinition(
             name="codex_list_models",

@@ -22,6 +22,8 @@ class ToolDefinition:
     # Optional slash command for direct user invocation (e.g., "/reload")
     # If set, the tool can be called both by model (as tool) and user (as slash command)
     slash_command: str | None = None
+    # If True, the TUI will suspend itself and drop back to the terminal before executing this tool.
+    requires_tty: bool = False
 
     def __post_init__(self):
         if self.handler is None:

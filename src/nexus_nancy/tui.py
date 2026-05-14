@@ -171,6 +171,39 @@ class NancyTUI(App[None]):
             self._refresh_status()
             return
 
+        from .tools import REGISTRY
+        if text.startswith("/"):
+            cmd_parts = text.split()
+            cmd_name = cmd_parts[0]
+            tool = REGISTRY.get_slash_command(cmd_name)
+            if tool and getattr(tool, "requires_tty", False):
+                with self.suspend():
+                    args = {}
+                    for part in cmd_parts[1:]:
+                        if "=" in part:
+                            key, value = part.split("=", 1)
+                            args[key] = value
+                        else:
+                            args[part] = ""
+                    try:
+                        print(f"\nRunning {cmd_name}...")
+                        result = tool.handler(sandbox=self.sandbox, **args)
+                        if result is None:
+                            result = f"{cmd_name} completed (no output)."
+                        print("\n" + result)
+                    except Exception as exc:
+                        print(f"\nError: {type(exc).__name__}: {exc}")
+                        result = f"error executing {cmd_name}: {type(exc).__name__}: {exc}"
+                    
+                    input("\nPress Enter to return to Nancy...")
+                
+                if "error executing" in str(result):
+                    await self._append_block("error", "ERR", str(result))
+                else:
+                    await self._append_block("system", "SYS", str(result))
+                self._refresh_status()
+                return
+
         user_marker = (self.state.cfg.user_display_name or "USER").strip().upper()
         await self._append_block("user", user_marker, text)
         self._refresh_status()
