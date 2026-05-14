@@ -79,7 +79,7 @@ class CodexAuth:
                 raise KeyError(f"'device_auth_id' missing from response. Body: {data}")
 
             user_code = data["user_code"]
-            verification_uri = data.get("verification_uri", "https://chatgpt.com/codex/device")
+            verification_uri = data.get("verification_uri", "https://auth.openai.com/codex/device")
 
             if organization_id:
                 verification_uri += f"?organization={organization_id}"
