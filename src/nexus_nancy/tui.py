@@ -119,11 +119,52 @@ class NancyTUI(App[None]):
         yield Footer()
 
     async def on_mount(self) -> None:
-        await self._append_block("system", "SYS", "Nexus-Nancy ready")
+        self._refresh_status()
+        self.query_one("#prompt", Input).focus()
+        await self._run_startup_diagnostics()
+
+    async def _run_startup_diagnostics(self) -> None:
+        from .doctor import run_doctor
+
+        # Run doctor logic for an authoritative system snapshot.
+        report = await asyncio.to_thread(run_doctor, self.state.cfg, self.state.workspace_root)
+
+        loop_name = (
+            "Native OpenAI-Tool Loop"
+            if self.state.execution_strategy == "native_openai"
+            else "Universal Harness Loop"
+        )
+
+        # 1. Permanent Header
+        if report.ok:
+            header = f"Nancy System Ready\nMode: {loop_name}"
+            await self._append_block("system", "SYS", header)
+        else:
+            header = f"Nancy System NOT Ready 🔴\nMode: {loop_name}"
+            await self._append_block("system-not-ready", "SYS", header)
+
+        # 2. Collapsible Health Snapshot
+        snapshot_lines = []
+        for line in report.lines:
+            if ":" not in line or "Nexus-Nancy doctor" in line or "overall:" in line:
+                continue
+
+            # Make the doctor lines look "Nancy-grade" human-readable.
+            clean = line.replace("[OK]", "✅").replace("[FAIL]", "❌")
+            clean = clean.replace("api_key:", "API Key").replace("base_url_health:", "LLM Health")
+            clean = clean.replace("execution_route:", "Route Check").replace(
+                "sandbox_root:", "Sandbox"
+            )
+            clean = clean.replace("config_file:", "Config").replace("workspace:", "Root")
+            snapshot_lines.append(clean.strip())
+
+        # Expand snapshot by default if system is not ready
+        await self._append_debug_block(
+            "SYSTEM HEALTH SNAPSHOT", "\n".join(snapshot_lines), expanded=not report.ok
+        )
 
         # Surface any plugin loading errors recorded at startup
         from .tools import REGISTRY
-
         for error in REGISTRY.loading_errors:
             await self._append_block("error", "ERR", error)
 
@@ -131,16 +172,14 @@ class NancyTUI(App[None]):
         tool_names = sorted(REGISTRY._tools.keys())
         await self._append_block("system", "SYS", f"Loaded tools: {', '.join(tool_names)}")
 
-        await self._append_block(
-            "system",
-            "SYS",
-            (
-                "Logs and transcripts are plain local files in this workspace. "
-                "Anyone with access here can read them."
-            ),
+        # 3. Permanent Footer
+        logs_path = self.state.workspace_root / "logs"
+        transcripts_path = self.state.workspace_root / ".agents" / "transcripts"
+        footer = (
+            f"Logs ({logs_path}/) and transcripts ({transcripts_path}/) are plain local files.\n"
+            "Anyone with access to this workspace can read them."
         )
-        self._refresh_status()
-        self.query_one("#prompt", Input).focus()
+        await self._append_block("system", "SYS", footer)
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         text = event.value.strip()
@@ -172,6 +211,7 @@ class NancyTUI(App[None]):
             return
 
         from .tools import REGISTRY
+
         if text.startswith("/"):
             cmd_parts = text.split()
             cmd_name = cmd_parts[0]

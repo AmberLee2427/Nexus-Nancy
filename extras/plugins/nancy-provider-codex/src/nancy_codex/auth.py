@@ -103,7 +103,6 @@ class CodexAuth:
                     headers=headers,
                 )
 
-
                 if token_resp.status_code == 200:
                     data = token_resp.json()
                     authorization_code = data.get("authorization_code")

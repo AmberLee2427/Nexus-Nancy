@@ -210,7 +210,9 @@ def main() -> None:
         if "256color" in term or "truecolor" in term or "xterm" in term:
             os.environ["COLORTERM"] = "truecolor"
 
-    yolo, single_prompt, show_help, command, mock_port, mock_prompt, run_tool = _parse_args(sys.argv[1:])
+    yolo, single_prompt, show_help, command, mock_port, mock_prompt, run_tool = _parse_args(
+        sys.argv[1:]
+    )
     workspace_root = Path.cwd().resolve()
     bootstrap_local_files(workspace_root)
     initialize_tools(workspace_root)

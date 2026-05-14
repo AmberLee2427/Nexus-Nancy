@@ -213,7 +213,7 @@ def resolve_api_key(cfg: Config, workspace_root: Path) -> tuple[str | None, str]
     key_file = api_key_path(cfg, workspace_root)
     if key_file.exists() and key_file.is_file():
         key = key_file.read_text(encoding="utf-8").strip()
-        if key:
+        if key and key.lower() != "local":
             return key, f"file:{key_file}"
 
     env_key = os.environ.get(cfg.api_key_env)
