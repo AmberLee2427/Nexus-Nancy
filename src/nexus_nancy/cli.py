@@ -136,13 +136,14 @@ def _config_with_mock_server(cfg: Config, port: int) -> Config:
 
 def _parse_args(
     argv: list[str],
-) -> tuple[bool, str | None, bool, str | None, int | None, str | None]:
+) -> tuple[bool, str | None, bool, str | None, int | None, str | None, str | None]:
     yolo = False
     prompt = None
     show_help = False
     command = None
     mock_port: int | None = None
     mock_prompt: str | None = None
+    run_tool: str | None = None
 
     args = list(argv)
     if args and args[0] == "yolo":
@@ -155,6 +156,12 @@ def _parse_args(
         if arg in {"instructions", "config", "secrets", "doctor"}:
             command = arg
             i += 1
+        elif arg == "run":
+            command = "run"
+            if i + 1 >= len(args):
+                raise SystemExit("run requires a tool name")
+            run_tool = args[i + 1]
+            i += 2
         elif arg in {"-h", "--help"}:
             show_help = True
             i += 1
@@ -191,7 +198,7 @@ def _parse_args(
         else:
             raise SystemExit(f"unknown arg: {arg}")
 
-    return yolo, prompt, show_help, command, mock_port, mock_prompt
+    return yolo, prompt, show_help, command, mock_port, mock_prompt, run_tool
 
 
 def main() -> None:
@@ -203,7 +210,7 @@ def main() -> None:
         if "256color" in term or "truecolor" in term or "xterm" in term:
             os.environ["COLORTERM"] = "truecolor"
 
-    yolo, single_prompt, show_help, command, mock_port, mock_prompt = _parse_args(sys.argv[1:])
+    yolo, single_prompt, show_help, command, mock_port, mock_prompt, run_tool = _parse_args(sys.argv[1:])
     workspace_root = Path.cwd().resolve()
     bootstrap_local_files(workspace_root)
     initialize_tools(workspace_root)
@@ -221,6 +228,38 @@ def main() -> None:
             message = exc
         print(f"error: {message}", file=sys.stderr, flush=True)
         raise SystemExit(1)
+
+    if command == "run" and run_tool:
+        from .tools import REGISTRY
+        from .sandbox import SandboxPolicy
+        from .config import load_sandbox_allowlist
+        
+        cfg = load_config(workspace_root)
+        allowlist = load_sandbox_allowlist(workspace_root)
+        sandbox_root_path = Path(cfg.sandbox_root).expanduser()
+        if not sandbox_root_path.is_absolute():
+            sandbox_root_path = (workspace_root / sandbox_root_path).resolve()
+        else:
+            sandbox_root_path = sandbox_root_path.resolve()
+        sandbox = SandboxPolicy(root=sandbox_root_path, yolo=yolo, allowlist_substrings=allowlist)
+
+        tool = REGISTRY._tools.get(run_tool)
+        if not tool:
+            # Also try looking up by slash command
+            tool = REGISTRY.get_slash_command(f"/{run_tool}")
+            if not tool:
+                fail(f"unknown tool: {run_tool}")
+
+        if not tool.handler:
+            fail(f"tool {run_tool} has no handler")
+
+        try:
+            result = tool.handler(sandbox=sandbox)
+            if result:
+                print(result)
+        except Exception as exc:
+            fail(exc)
+        return
 
     if command == "instructions":
         open_in_editor(instructions_path(workspace_root))
