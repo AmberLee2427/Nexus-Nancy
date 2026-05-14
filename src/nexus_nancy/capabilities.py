@@ -59,15 +59,15 @@ def detect_capabilities(
         )
 
     if cfg.capability_probe:
+        client = probe_client
+        if client is None:
+            if workspace_root is None:
+                raise RuntimeError("workspace_root required for live capability probe")
+            from .provider import get_provider
+
+            client = get_provider(cfg, workspace_root)
+
         try:
-            client = probe_client
-            if client is None:
-                if workspace_root is None:
-                    raise RuntimeError("workspace_root required for live capability probe")
-                from .provider import get_provider
-
-                client = get_provider(cfg, workspace_root)
-
             p_caps = client.probe_capabilities()
             if p_caps.get("native_tools"):
                 # If the user explicitly set a feature, use it; otherwise trust the probe.
