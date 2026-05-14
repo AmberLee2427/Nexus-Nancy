@@ -49,9 +49,14 @@ def register_providers() -> None:
         eps = metadata.entry_points(group="nexus_nancy.providers")
         for ep in eps:
             try:
-                provider_cls = ep.load()
-                if isinstance(provider_cls, type) and issubclass(provider_cls, LLMProvider):
-                    PROVIDER_REGISTRY[ep.name] = provider_cls
+                plugin = ep.load()
+                if hasattr(plugin, "register_providers"):
+                    providers = plugin.register_providers()
+                    for name, provider_cls in providers.items():
+                        if isinstance(provider_cls, type) and issubclass(provider_cls, LLMProvider):
+                            PROVIDER_REGISTRY[name] = provider_cls
+                elif isinstance(plugin, type) and issubclass(plugin, LLMProvider):
+                    PROVIDER_REGISTRY[ep.name] = plugin
             except Exception as exc:
                 print(
                     f"warning: failed to load provider entry point {ep.name}: {exc}",
