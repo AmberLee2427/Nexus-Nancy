@@ -1,5 +1,4 @@
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -57,11 +56,11 @@ class CodexProvider(LLMProvider):
         input_messages = []
         for msg in messages:
             role = msg.get("role")
-            
+
             if role == "system":
                 instructions = msg.get("content", "")
                 continue
-                
+
             if role == "tool":
                 # Standard OpenAI tool response maps to function_call_output
                 input_messages.append({
@@ -70,7 +69,7 @@ class CodexProvider(LLMProvider):
                     "output": msg.get("content", "")
                 })
                 continue
-                
+
             # Handle user and assistant messages
             content = msg.get("content", "")
             if content:
@@ -81,7 +80,7 @@ class CodexProvider(LLMProvider):
                         "content": [{"type": "input_text", "text": content}],
                     }
                 )
-                
+
             # If the assistant made tool calls, append them as separate items
             if role == "assistant" and msg.get("tool_calls"):
                 for tc in msg["tool_calls"]:
@@ -101,7 +100,7 @@ class CodexProvider(LLMProvider):
             "stream": True,
             "store": False,
         }
-        
+
         if tools:
             # Backend-API expects tools to be flattened, not wrapped in type: function
             flat_tools = []
