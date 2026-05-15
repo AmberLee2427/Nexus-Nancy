@@ -63,11 +63,13 @@ class CodexProvider(LLMProvider):
 
             if role == "tool":
                 # Standard OpenAI tool response maps to function_call_output
-                input_messages.append({
-                    "type": "function_call_output",
-                    "call_id": msg.get("tool_call_id"),
-                    "output": msg.get("content", "")
-                })
+                input_messages.append(
+                    {
+                        "type": "function_call_output",
+                        "call_id": msg.get("tool_call_id"),
+                        "output": msg.get("content", ""),
+                    }
+                )
                 continue
 
             # Handle user and assistant messages
@@ -86,12 +88,14 @@ class CodexProvider(LLMProvider):
                 for tc in msg["tool_calls"]:
                     if tc.get("type") == "function":
                         fn = tc.get("function", {})
-                        input_messages.append({
-                            "type": "function_call",
-                            "name": fn.get("name"),
-                            "arguments": fn.get("arguments", "{}"),
-                            "call_id": tc.get("id")
-                        })
+                        input_messages.append(
+                            {
+                                "type": "function_call",
+                                "name": fn.get("name"),
+                                "arguments": fn.get("arguments", "{}"),
+                                "call_id": tc.get("id"),
+                            }
+                        )
 
         payload = {
             "model": self.cfg.model,
@@ -107,12 +111,14 @@ class CodexProvider(LLMProvider):
             for t in tools:
                 if t.get("type") == "function":
                     fn = t.get("function", {})
-                    flat_tools.append({
-                        "name": fn.get("name"),
-                        "type": "function",
-                        "description": fn.get("description", ""),
-                        "parameters": fn.get("parameters", {})
-                    })
+                    flat_tools.append(
+                        {
+                            "name": fn.get("name"),
+                            "type": "function",
+                            "description": fn.get("description", ""),
+                            "parameters": fn.get("parameters", {}),
+                        }
+                    )
             payload["tools"] = flat_tools
 
         headers = self._get_headers()
