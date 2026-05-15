@@ -1,5 +1,4 @@
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -57,20 +56,22 @@ class CodexProvider(LLMProvider):
         input_messages = []
         for msg in messages:
             role = msg.get("role")
-            
+
             if role == "system":
                 instructions = msg.get("content", "")
                 continue
-                
+
             if role == "tool":
                 # Standard OpenAI tool response maps to function_call_output
-                input_messages.append({
-                    "type": "function_call_output",
-                    "call_id": msg.get("tool_call_id"),
-                    "output": msg.get("content", "")
-                })
+                input_messages.append(
+                    {
+                        "type": "function_call_output",
+                        "call_id": msg.get("tool_call_id"),
+                        "output": msg.get("content", ""),
+                    }
+                )
                 continue
-                
+
             # Handle user and assistant messages
             content = msg.get("content", "")
             if content:
@@ -81,18 +82,20 @@ class CodexProvider(LLMProvider):
                         "content": [{"type": "input_text", "text": content}],
                     }
                 )
-                
+
             # If the assistant made tool calls, append them as separate items
             if role == "assistant" and msg.get("tool_calls"):
                 for tc in msg["tool_calls"]:
                     if tc.get("type") == "function":
                         fn = tc.get("function", {})
-                        input_messages.append({
-                            "type": "function_call",
-                            "name": fn.get("name"),
-                            "arguments": fn.get("arguments", "{}"),
-                            "call_id": tc.get("id")
-                        })
+                        input_messages.append(
+                            {
+                                "type": "function_call",
+                                "name": fn.get("name"),
+                                "arguments": fn.get("arguments", "{}"),
+                                "call_id": tc.get("id"),
+                            }
+                        )
 
         payload = {
             "model": self.cfg.model,
@@ -101,19 +104,21 @@ class CodexProvider(LLMProvider):
             "stream": True,
             "store": False,
         }
-        
+
         if tools:
             # Backend-API expects tools to be flattened, not wrapped in type: function
             flat_tools = []
             for t in tools:
                 if t.get("type") == "function":
                     fn = t.get("function", {})
-                    flat_tools.append({
-                        "name": fn.get("name"),
-                        "type": "function",
-                        "description": fn.get("description", ""),
-                        "parameters": fn.get("parameters", {})
-                    })
+                    flat_tools.append(
+                        {
+                            "name": fn.get("name"),
+                            "type": "function",
+                            "description": fn.get("description", ""),
+                            "parameters": fn.get("parameters", {}),
+                        }
+                    )
             payload["tools"] = flat_tools
 
         headers = self._get_headers()

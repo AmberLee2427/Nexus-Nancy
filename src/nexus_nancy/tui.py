@@ -165,6 +165,7 @@ class NancyTUI(App[None]):
 
         # Surface any plugin loading errors recorded at startup
         from .tools import REGISTRY
+
         for error in REGISTRY.loading_errors:
             await self._append_block("error", "ERR", error)
 
